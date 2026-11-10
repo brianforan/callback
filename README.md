@@ -42,7 +42,7 @@ Click any job to open its drawer, which has two steps:
 
 ### Scout (feature flagged)
 
-Scout finds the jobs keyword search misses. Describe the work you want, pick what a job must use, what rules one out and the levels you want, type the job titles to search under, and start a run.
+Scout finds the jobs keyword search misses. Describe the work you want, pick what a job must use, what rules one out and the levels you want, type the job titles to search under, and start a run. Each run first reads your baselines, fact sheet and description to learn what work you do, and keeps its search inside that work, so even a vague description finds jobs in your field. The Scout page shows what it read, and you can edit it.
 
 A run searches the job boards and Callback's shared catalog of companies' own job boards, rules out in code whatever can't fit, and has Claude Haiku screen each remaining job and Claude Sonnet take a second look. A lead is kept only when both agree. Each run stops at the first limit it reaches (enough leads, postings checked, web searches, time, or a spending ceiling), all enforced in code.
 

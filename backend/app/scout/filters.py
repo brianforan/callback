@@ -12,7 +12,7 @@ from typing import Any
 
 from app.postings.parser import canonical_url, company_key
 from app.scout.limits import title_query
-from app.scout.match import spec_from_payload
+from app.scout.match import search_titles, spec_from_payload
 from app.workers import TailorUnavailable
 
 logger = logging.getLogger(__name__)
@@ -178,10 +178,10 @@ def _abroad(page_location: str, us_only: bool) -> bool:
 
 
 def board_queries(payload: dict[str, Any]) -> list[str]:
-    """Job board searches for a brief: each Must use technology, else each title phrase as an
-    exact phrase, up to a few searches."""
+    """Job board searches for a brief: each Must use technology, else each title phrase it
+    searches under as an exact phrase, up to a few searches."""
     spec = spec_from_payload(payload)
     queries = [f'"{name}"' if " " in name else name for name in spec.must_have]
     if not queries:
-        queries = [title_query(phrase) for phrase in payload.get("title_families") or []]
+        queries = [title_query(phrase) for phrase in search_titles(payload)]
     return list(dict.fromkeys(queries))[:_MAX_BOARD_QUERIES]

@@ -18,14 +18,22 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconCheck, IconEye, IconLock, IconX } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
 import { PageError, PageLoader } from '../components/PageState';
 import { RunButton, runsLeft, runsLeftText, ScoutRuns } from '../components/ScoutRuns';
 import { formatDateTime, formatUsd } from '../lib/format';
 import { LEVELS, WORK_MODE_OPTIONS } from '../lib/postings';
-import { useFactSheet, useProfiles, useResumes, useSaveScout, useScout } from '../lib/queries';
+import {
+  useEditScoutWork,
+  useFactSheet,
+  useProfiles,
+  useReadScoutWorkAgain,
+  useResumes,
+  useSaveScout,
+  useScout,
+} from '../lib/queries';
 import { SECTIONS } from '../lib/sections';
 import type {
   AgencyMode,
@@ -35,6 +43,7 @@ import type {
   Scout,
   ScoutLimitRange,
   ScoutSettingsPayload,
+  ScoutWorkBoundary,
   WorkMode,
 } from '../lib/types';
 
@@ -42,8 +51,9 @@ const COLOR = SECTIONS.scout.color;
 // Matches the server's limit on a location.
 const LOCATION_MAX_LENGTH = 120;
 
-// Match the server's limits on title phrases.
+// Match the server's limits on title phrases and the work line.
 const MAX_TITLE_PHRASES = 15;
+const WORK_MAX_LENGTH = 200;
 const TITLE_PHRASE_MIN_LENGTH = 2;
 const TITLE_PHRASE_MAX_LENGTH = 60;
 // Suggested to profiles that use the built-in software skills: the titles Scout once offered.
@@ -357,6 +367,91 @@ function ReadsCard() {
   );
 }
 
+/** The work Scout read from the baselines, which a run searches inside, with Edit. */
+function WorkLine({ boundary, locked }: { boundary: ScoutWorkBoundary | null; locked: boolean }) {
+  const edit = useEditScoutWork();
+  const again = useReadScoutWorkAgain();
+  const [draft, setDraft] = useState<string | null>(null);
+
+  if (!boundary) {
+    return (
+      <Text size="xs" c="dimmed">
+        Each run first reads your baselines, fact sheet and description to learn what work to look
+        for, and searches inside it.
+      </Text>
+    );
+  }
+  if (draft !== null) {
+    const submit = (event: FormEvent) => {
+      event.preventDefault();
+      if (draft.trim()) edit.mutate(draft.trim(), { onSuccess: () => setDraft(null) });
+    };
+    return (
+      <form onSubmit={submit}>
+        <Group gap="xs" align="flex-end" wrap="wrap">
+          <TextInput
+            size="xs"
+            flex={1}
+            miw={220}
+            aria-label="Your work"
+            maxLength={WORK_MAX_LENGTH}
+            value={draft}
+            onChange={(event) => setDraft(event.currentTarget.value)}
+          />
+          <Button
+            size="xs"
+            type="submit"
+            color={COLOR}
+            disabled={!draft.trim()}
+            loading={edit.isPending}
+          >
+            Save
+          </Button>
+          <Button size="xs" variant="default" onClick={() => setDraft(null)}>
+            Cancel
+          </Button>
+        </Group>
+      </form>
+    );
+  }
+  return (
+    <Stack gap={4}>
+      <Group gap={6} wrap="wrap">
+        <Text size="xs" c="dimmed">
+          Scout reads your work as: {boundary.work}
+          {boundary.edited ? ' (as you wrote it)' : ''}
+        </Text>
+        {!locked && (
+          <Button
+            size="compact-xs"
+            variant="subtle"
+            color={COLOR}
+            onClick={() => setDraft(boundary.work)}
+          >
+            Edit
+          </Button>
+        )}
+      </Group>
+      {boundary.changed && !locked && (
+        <Group gap={6} wrap="wrap">
+          <Text size="xs" c="dimmed">
+            Your baselines, fact sheet or description changed since you edited this.
+          </Text>
+          <Button
+            size="compact-xs"
+            variant="light"
+            color={COLOR}
+            loading={again.isPending}
+            onClick={() => again.mutate()}
+          >
+            Read again
+          </Button>
+        </Group>
+      )}
+    </Stack>
+  );
+}
+
 function ScoutForm({ config }: { config: Scout }) {
   const save = useSaveScout();
   const profiles = useProfiles();
@@ -387,6 +482,12 @@ function ScoutForm({ config }: { config: Scout }) {
     (name) =>
       !ruledInText.has(name) && !draft.must_have.includes(name) && !draft.rule_out.includes(name),
   );
+  const boundary = config.settings.work_boundary;
+  // A run searches under the boundary's titles when none are picked and nothing must be used.
+  const boundaryTitles =
+    boundary && draft.title_families.length === 0 && draft.must_have.length === 0
+      ? boundary.titles
+      : [];
   const activeProfile = profiles.data?.profiles.find(
     (profile) => profile.id === profiles.data?.active_id,
   );
@@ -427,6 +528,7 @@ function ScoutForm({ config }: { config: Scout }) {
               <Text size="xs" c="dimmed" ta="right" mt={-12} className="tabular">
                 {draft.description.length} / {config.description_max_length}
               </Text>
+              <WorkLine boundary={boundary} locked={locked} />
 
               <Stack gap={6}>
                 <TagsInput
@@ -502,7 +604,7 @@ function ScoutForm({ config }: { config: Scout }) {
               <Stack gap={6}>
                 <TagsInput
                   label="Titles to search under"
-                  description="Phrases a job title might use, each matched exactly. Press Enter to add one. With a Must use list, these rank matching titles first; without one, a title must name one of them (or, with none picked, be a plain engineering title)."
+                  description="Phrases a job title might use, each matched exactly. Press Enter to add one. With a Must use list, these rank matching titles first; without one, a title must name one of them (or, with none picked, one Scout read from your baselines)."
                   placeholder={draft.title_families.length ? '' : 'e.g. solutions engineer'}
                   value={draft.title_families}
                   onChange={(values) => update({ title_families: cleanTitlePhrases(values) })}
@@ -511,6 +613,27 @@ function ScoutForm({ config }: { config: Scout }) {
                   clearable
                   disabled={locked}
                 />
+                {boundaryTitles.length > 0 && (
+                  <Group gap={6}>
+                    <Text size="xs" c="dimmed">
+                      Searching under titles from your baselines: {boundaryTitles.join(', ')}.
+                    </Text>
+                    {!locked && (
+                      <Button
+                        size="compact-xs"
+                        variant="light"
+                        color={COLOR}
+                        onClick={() =>
+                          update({
+                            title_families: boundaryTitles.slice(0, MAX_TITLE_PHRASES),
+                          })
+                        }
+                      >
+                        Use and edit
+                      </Button>
+                    )}
+                  </Group>
+                )}
                 {titleSuggestions.length > 0 && !locked && (
                   <Group gap={6}>
                     <Text size="xs" c="dimmed">

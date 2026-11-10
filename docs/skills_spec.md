@@ -2,7 +2,7 @@
 
 Status: spec, 2026-11-10, revised the same day for shared field pools, catalog suggestions,
 model suggestions only if needed, and employer rank words, and again for Scout's work boundary.
-Chunks 1, 2 and 9 are built (2026-11-10); the rest isn't. It changes how postings are parsed
+Chunks 1, 2, 9 and 10 are built (2026-11-10); the rest isn't. It changes how postings are parsed
 and scored (`app/postings/parser.py`, `app/resumes/matching.py`, `app/resumes/structure.py`,
 `app/vocabulary.py`) and everything that reads their skills.
 
@@ -385,11 +385,10 @@ titles unrelated to the profile.
   `title_keys`). So a changed boundary judges jobs afresh. Adding it changes every existing brief's
   key once, so the next run of each profile judges its remembered jobs again, about the cost of
   one ordinary run.
-- **Nothing to go on.** Starting a run is refused, before anything is spent, when the profile has
-  no baselines and a blank fact sheet, and the brief has a blank description, no Must use list and
-  no title phrases. The message says what to add: a baseline, a title to search under or a Must
-  use list. A boundary call that finds no work (no titles) fails the run the same way, without
-  counting it.
+- **Nothing to go on.** Starting a run already needs a description, so the rule is the read's:
+  when it finds no work (no line or no usable title), as with "anything" and no baselines or fact
+  sheet, the run fails before any posting is judged, without counting toward the day's runs. The
+  message says what to add: a baseline, a title to search under or a Must use list.
 - **Used at once, shown and editable.** The boundary is used as soon as it's made; nothing waits
   for the person to accept it, since a run with too little to go on is exactly when it's needed.
   The Scout page shows it under the description: "Scout reads your work as: …" with **Edit**, and,
@@ -473,10 +472,10 @@ Resumes has a fourth tab, **Skills**, for the active profile:
 9. **Scout's title phrases.** Built 2026-11-10. Editable chips, phrases stored per profile, the
    migration of `title_families`, phrase matching in the title gate, rank and board searches, the
    brief-key mapping and fencing in tailor's prompts.
-10. **Scout's work boundary.** The tailor call, `work_boundary` on Scout's settings, the boundary
-    as the no-titles fallback in the gate, rank and board searches, the Their work line and keep
-    rule in the judge, the brief key, refusing a run with nothing to go on, the Scout page's
-    lines, and dropping `_ENGINEERING_TITLE`. Needs nothing from chunks 3–8.
+10. **Scout's work boundary.** Built 2026-11-10. The tailor call, `work_boundary` on Scout's
+    settings, the boundary as the no-titles fallback in the gate, rank and board searches, the
+    Their work line and keep rule in the judge, the brief key, failing a run with nothing to go
+    on, the Scout page's lines, and dropping `_ENGINEERING_TITLE`.
 
 Each chunk is usable on its own, and the README changes with each.
 

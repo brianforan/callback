@@ -43,7 +43,7 @@ from app.models import (
     utcnow,
 )
 from app.scout.limits import title_keys
-from app.scout.match import level_from_value, parsed_level, spec_from_payload
+from app.scout.match import level_from_value, parsed_level, search_titles, spec_from_payload
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def brief_key(payload: dict[str, Any]) -> str:
     is a new key, so earlier verdicts stop applying."""
     parts = {
         "description": payload.get("description") or "",
-        "title_families": title_keys(payload.get("title_families") or []),
+        "title_families": title_keys(search_titles(payload)),
         "work_modes": sorted(payload.get("work_modes") or []),
         "location": payload.get("location") or "",
         "fit_mode": payload.get("fit_mode") or "",
@@ -85,6 +85,9 @@ def brief_key(payload: dict[str, Any]) -> str:
     # Only when set, so briefs saved before relocation existed keep their verdicts.
     if (payload.get("relocation") or "none") != "none":
         parts["relocation"] = payload["relocation"]
+    # The work line from the profile's work boundary, once there is one.
+    if payload.get("work"):
+        parts["work"] = payload["work"]
     # The stack and levels the judge is held to. Verdicts made before strict matching didn't
     # check them, so they never carry over.
     spec = spec_from_payload(payload)

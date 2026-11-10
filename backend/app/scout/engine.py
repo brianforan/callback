@@ -32,7 +32,7 @@ from datetime import date, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, true
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
@@ -56,6 +56,7 @@ from app.models import (
     CompanySource,
     PostingLevel,
     ProfileCompany,
+    ScoutSettings,
     utcnow,
 )
 from app.postings.parser import company_key
@@ -88,11 +89,13 @@ from app.scout.match import (
     level_fit,
     level_from_value,
     ruled_out,
+    search_titles,
     spec_from_payload,
     stack_passes,
     stack_place,
 )
 from app.scout.metros import in_major_metro
+from app.scout.work import boundary_from_answer, payload_inputs_key
 from app.workers import TailorUnavailable
 
 logger = logging.getLogger(__name__)
@@ -120,16 +123,6 @@ _MAX_POSTING_TEXT = 12_000
 # A company whose leads for this profile were all turned down, at least this many, is skipped.
 _DISMISSED_TO_SKIP = 3
 _ON_SITE = ("onsite", "hybrid")
-# Plain engineering titles, kept for the judge when a brief has no stack rule and no title
-# phrases, since a "Senior Software Engineer" posting rarely puts the work in its title.
-_ENGINEERING_TITLE = re.compile(
-    r"\b(?:developer|programmer|swe"
-    r"|(?:software|back[- ]?end|front[- ]?end|full[- ]?stack|web|application|platform|php|"
-    r"product|integrations?|tools?|systems?)\s+engineer(?:ing)?)\b",
-    re.I,
-)
-# Title words a SQL prefilter looks for when a brief has no stack rule.
-_ENGINEERING_WORDS = ("engineer", "developer", "programmer")
 # Where the stack is named, as rank points: the title beats a requirements line beats a mention.
 _STACK_POINTS = {StackPlace.TITLE: 12, StackPlace.REQUIRED: 8, StackPlace.MENTIONED: 4}
 
@@ -210,6 +203,9 @@ class CompanyStages:
     # Callback's job boards, searched by code: {"queries", "location"} gives {"pages",
     # "failed"}, with everything found already recorded in the catalog.
     boards: Stage | None = None
+    # tailor's /pipeline/work: the profile's work boundary, read from its baselines, fact sheet
+    # and description (app.scout.work). Without it, a run uses only the titles picked.
+    work: Stage | None = None
 
 
 def states_named(location: str | None) -> set[str]:
@@ -422,15 +418,11 @@ class _Run:
         self.max_checks = int(self.limits["max_pages"])
         self.time_limit = int(self.limits["max_minutes"]) * 60
         self.spec = spec_from_payload(payload)
-        # What the judge is told: the brief with the stack and levels code holds it to.
-        self.brief = {**payload, **brief_lines(self.spec)}
+        self._use_titles()
         self.hidden = {company_key(name) for name in payload.get("hidden_companies") or []}
         self.location = payload.get("location") or ""
         self.us_only = board_location(self.location) == "us"
         self.wanted_states = states_named(self.location) if self.us_only else set()
-        self.families = [
-            parse_query(title_query(phrase)) for phrase in payload.get("title_families") or []
-        ]
         known_urls, known_pairs = _known(payload)
         self.known_urls = known_urls | {link for url in known_urls if (link := catalog_url(url))}
         self.known_pairs = known_pairs | {
@@ -446,6 +438,7 @@ class _Run:
     # Steps
 
     def go(self, wait_seconds: float) -> ScoutServiceResult:
+        self._read_work()
         self.tally.step("note", self._spec_note())
         self._harvest()
         self._catalog_companies()
@@ -498,6 +491,67 @@ class _Run:
         return self._finish(
             "finished", f"Checked every job that matched the brief: {self.checked} postings."
         )
+
+    def _use_titles(self) -> None:
+        """The titles the run searches under, and the brief the judge is told: the run's
+        settings with the stack and levels code holds it to, and the work boundary's titles when
+        they're the ones searched under."""
+        self.titles = search_titles(self.payload)
+        self.families = [parse_query(title_query(phrase)) for phrase in self.titles]
+        self.brief = {**self.payload, "title_families": self.titles, **brief_lines(self.spec)}
+
+    def _read_work(self) -> None:
+        """The profile's work boundary: the saved one, or a new one when what it was read from
+        changed. An edited one is kept until the person asks for it to be read again."""
+        call = self.stages.work
+        if call is None or self.profile_id is None:
+            return
+        settings = self.db.scalar(
+            select(ScoutSettings).where(ScoutSettings.profile_id == self.profile_id)
+        )
+        if settings is None:
+            return
+        boundary = settings.work_boundary
+        key = payload_inputs_key(self.payload)
+        if not boundary or not (boundary.get("edited") or boundary.get("inputs_key") == key):
+            boundary = self._new_work(call, settings, key, boundary)
+        self.payload["work"] = boundary["work"]
+        self.payload["boundary_titles"] = boundary["titles"]
+        self._use_titles()
+
+    def _new_work(
+        self, call: Stage, settings: ScoutSettings, key: str, old: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        """One model call for the work boundary. When it fails, the last one is used; with none,
+        or when it finds no work, the run can't tell what to look for and fails uncounted."""
+        material = {
+            "description": self.payload.get("description") or "",
+            "fact_sheet": self.payload.get("fact_sheet") or "",
+            "baselines": self.payload.get("baselines") or [],
+        }
+        try:
+            answer = call(material)
+        except TailorUnavailable as exc:
+            self.tally.add_failed("work", exc)
+            if old:
+                self.tally.step(
+                    "error", f"Couldn't read your work again, so used what Scout read before: {exc}"
+                )
+                return old
+            raise TailorUnavailable(f"Couldn't read your work from your baselines: {exc}") from exc
+        self.tally.add("work", answer)
+        made = boundary_from_answer(answer, key)
+        if made is None:
+            raise TailorUnavailable(
+                "Scout couldn't tell what work to look for from your baselines, fact sheet and "
+                "description. Add a baseline, a title to search under or a Must use list."
+            )
+        settings.work_boundary = made
+        self.db.commit()
+        self.tally.step(
+            "note", f"Read your work as: {made['work']} Titles: {', '.join(made['titles'])}."
+        )
+        return made
 
     def _spec_note(self) -> str:
         stack = (
@@ -589,10 +643,14 @@ class _Run:
                 *(CatalogJob.text.ilike(f"%{word}%") for word in words),
             )
         else:
-            words = list(self.payload.get("title_families") or []) or list(_ENGINEERING_WORDS)
-            matches = or_(
-                CatalogJob.company_id.in_(list(listed)),
-                *(CatalogJob.title.ilike(f"%{word}%") for word in words),
+            # With no titles at all (no boundary either), every title goes to the judge.
+            matches = (
+                or_(
+                    CatalogJob.company_id.in_(list(listed)),
+                    *(CatalogJob.title.ilike(f"%{word}%") for word in self.titles),
+                )
+                if self.titles
+                else true()
             )
         rows = self.db.execute(
             select(CatalogJob, Company)
@@ -688,11 +746,11 @@ class _Run:
         return None
 
     def _title_fits(self, title: str) -> bool:
-        """With no stack rule: a title phrase in the title, or with none picked, a plain
-        engineering title the judge will decide on."""
+        """With no stack rule: one of the titles searched under in the title. With none at all,
+        the judge decides."""
         if self.families:
             return any(search.matches_title(title, "") for search in self.families)
-        return bool(_ENGINEERING_TITLE.search(title))
+        return True
 
     def _candidate(
         self, job: CatalogJob, company: Company, listed: ProfileCompany | None
@@ -701,8 +759,6 @@ class _Run:
         strength = 0
         if self.spec.strict:
             strength += _STACK_POINTS.get(stack_place(self.spec, job.title, job.text), 0)
-        elif _ENGINEERING_TITLE.search(job.title):
-            strength += 1
         if any(search.matches_title(job.title, "") for search in self.families):
             strength += 2 if self.spec.strict else 4
         if self.spec.levels and level_fit(self.spec, level) is LevelFit.EXACT:

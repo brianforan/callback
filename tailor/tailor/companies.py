@@ -156,6 +156,7 @@ def _discover_brief(request: DiscoverRequest) -> str:
         f"Today is {request.today.isoformat()}.",
         "<search_brief>",
         f"What the person wants: {_fence(request.description, 'search_brief')}",
+        f"Their work: {_fence(request.work, 'search_brief') or 'not known'}",
         f"Title families: {titles or 'any, from the brief'}",
         f"Work modes: {', '.join(request.work_modes) or 'any'}",
         f"Location: {_fence(request.location, 'search_brief') or 'anywhere'}",

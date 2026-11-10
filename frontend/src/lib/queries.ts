@@ -695,6 +695,32 @@ export function useSaveScout() {
   });
 }
 
+function showScoutSettings(settings: ScoutSettings) {
+  queryClient.setQueryData<Scout>(['scout'], (current) =>
+    current ? { ...current, settings } : current,
+  );
+}
+
+/** Rewrite the work line Scout read from the baselines. */
+export function useEditScoutWork() {
+  return useMutation({
+    mutationFn: (work: string) =>
+      request<ScoutSettings>('/api/scout/work', {
+        method: 'PUT',
+        body: JSON.stringify({ work }),
+      }),
+    onSuccess: showScoutSettings,
+  });
+}
+
+/** Drop the edit, so the next run reads the work from the baselines again. */
+export function useReadScoutWorkAgain() {
+  return useMutation({
+    mutationFn: () => request<ScoutSettings>('/api/scout/work/edit', { method: 'DELETE' }),
+    onSuccess: showScoutSettings,
+  });
+}
+
 const SCOUT_POLL_MS = 4_000;
 
 export function isSearching(run: ScoutRun | undefined): boolean {

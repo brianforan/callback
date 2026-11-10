@@ -342,6 +342,9 @@ class ScoutSettings(Base):
     # PostingLevel values wanted. Empty means any level except intern and manager.
     levels: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
     limits: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)
+    # The work the profile does, read by a model from its baselines, fact sheet and description
+    # (app.scout.work): work, titles, inputs_key, made_at and edited. None until a run reads it.
+    work_boundary: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )

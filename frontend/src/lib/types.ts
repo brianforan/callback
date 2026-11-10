@@ -752,8 +752,21 @@ export interface ScoutSettingsPayload {
   limits: Record<string, number>;
 }
 
+/** The work Scout read from the profile's baselines, fact sheet and description. */
+export interface ScoutWorkBoundary {
+  work: string;
+  /** Searched under when no titles are picked and there's no Must use list. */
+  titles: string[];
+  /** The person rewrote the work line, so runs keep it. */
+  edited: boolean;
+  /** Edited, and what it was read from changed since. */
+  changed: boolean;
+}
+
 export interface ScoutSettings extends ScoutSettingsPayload {
   updated_at: string | null;
+  /** Null until a run reads it. */
+  work_boundary: ScoutWorkBoundary | null;
 }
 
 /** What a user's finished runs of one engine cost. */

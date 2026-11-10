@@ -44,7 +44,6 @@ from app.models import (
     FactSheet,
     HiddenListing,
     JobPosting,
-    Resume,
     ScoutBrief,
     ScoutRun,
     TailorStatus,
@@ -63,15 +62,15 @@ from app.scout.engine import CompanyStages, run_companies
 from app.scout.leads import declined_jobs, passed_pages, track_lead
 from app.scout.limits import ENGINE, LIMITS_BY_KEY
 from app.scout.match import clean_levels
+from app.scout.work import MAX_BASELINE_TEXT, scout_baselines
 from app.workers import TailorUnavailable, claim_oldest, poll_forever, post_json, run_safely
 
 logger = logging.getLogger(__name__)
 
 Stage = Callable[[dict[str, Any]], dict[str, Any]]
 
-# The tailor service refuses anything larger, so these are cut before sending.
-_MAX_BASELINES = 10
-_MAX_BASELINE_TEXT = 20_000
+# The tailor service refuses anything larger, so these are cut before sending. Baselines are
+# cut in app.scout.work, which reads them the same way for the work boundary.
 _MAX_KNOWN = 300
 _MAX_HIDDEN = 300
 _MAX_DECLINED = 50
@@ -138,12 +137,7 @@ def build_payload(db: Session, run: ScoutRun, today: date) -> dict[str, Any]:
     settings = run.settings or {}
     profile_id = _run_profile(db, run)
     sheet = db.scalar(select(FactSheet).where(FactSheet.profile_id == profile_id))
-    baselines = db.scalars(
-        select(Resume)
-        .where(Resume.profile_id == profile_id, Resume.is_variant.is_(True))
-        .order_by(Resume.created_at.desc())
-        .limit(_MAX_BASELINES)
-    ).all()
+    baselines = scout_baselines(db, profile_id)
     postings = db.scalars(
         select(JobPosting)
         .where(JobPosting.user_id == run.user_id)
@@ -179,7 +173,7 @@ def build_payload(db: Session, run: ScoutRun, today: date) -> dict[str, Any]:
         "budget_usd": float(settings.get("budget_usd") or get_value(db, "smartsearch_run_max_usd")),
         "fact_sheet": sheet.content if sheet else "",
         "baselines": [
-            {"label": resume.label[:120], "text": resume.plain_text[:_MAX_BASELINE_TEXT]}
+            {"label": resume.label[:120], "text": resume.plain_text[:MAX_BASELINE_TEXT]}
             for resume in baselines
         ],
         "known_jobs": known[:_MAX_KNOWN],
@@ -347,6 +341,7 @@ def http_company_stages(
         judge=_stage(client, "/pipeline/judge", {"tier": "screen"}),
         verify=_stage(client, "/pipeline/judge", {"tier": "verify"}),
         same_company=_stage(client, "/companies/same_company"),
+        work=_stage(client, "/pipeline/work"),
         discover=_stage(client, "/companies/discover"),
         careers=_stage(client, "/companies/careers"),
         read_feed=board,

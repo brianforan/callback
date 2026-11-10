@@ -159,6 +159,15 @@ class MatchSpec:
         return ", ".join(level.value for level in order if level in self.levels)
 
 
+def search_titles(payload: dict[str, Any]) -> list[str]:
+    """The title phrases a run searches under: the ones picked, else, with no Must use list, the
+    titles of the profile's work boundary (app.scout.work)."""
+    picked = list(payload.get("title_families") or [])
+    if picked or spec_from_payload(payload).strict:
+        return picked
+    return list(payload.get("boundary_titles") or [])
+
+
 def spec_from_payload(payload: dict[str, Any]) -> MatchSpec:
     """The run's match spec. A payload without must_have or rule_out reads them from its
     description, as a brief saved before they existed would."""

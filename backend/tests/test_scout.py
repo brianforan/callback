@@ -233,6 +233,44 @@ def test_start_run_needs_premium_and_saved_settings(client, session_factory):
     assert "Describe the work" in client.post("/api/scout/runs").json()["detail"]
 
 
+def test_the_work_line_shows_and_can_be_edited_or_read_again(client, session_factory):
+    from app.scout.work import profile_inputs_key
+
+    _save_settings(client, session_factory, description="anything im desperate")
+    assert client.get("/api/scout").json()["settings"]["work_boundary"] is None
+    assert client.put("/api/scout/work", json={"work": "Pharma"}).status_code == 404
+    with session_factory() as db:
+        saved = db.scalar(select(ScoutSettings))
+        saved.work_boundary = {
+            "work": "Pharmaceutical brand marketing",
+            "titles": ["brand manager"],
+            "inputs_key": profile_inputs_key(db, saved.profile_id, saved.description),
+            "made_at": "2026-11-10T00:00:00+00:00",
+            "edited": False,
+        }
+        db.commit()
+    shown = client.get("/api/scout").json()["settings"]["work_boundary"]
+    assert shown == {
+        "work": "Pharmaceutical brand marketing",
+        "titles": ["brand manager"],
+        "edited": False,
+        "changed": False,
+    }
+    assert client.put("/api/scout/work", json={"work": "   "}).status_code == 422
+    edited = client.put("/api/scout/work", json={"work": " Medical  affairs "}).json()
+    assert edited["work_boundary"]["work"] == "Medical affairs"
+    assert (edited["work_boundary"]["edited"], edited["work_boundary"]["changed"]) == (True, False)
+    # Saving settings keeps it in the answer, so the page doesn't lose it.
+    saved = client.put("/api/scout/settings", json=_payload(description="anything im desperate"))
+    assert saved.json()["work_boundary"]["work"] == "Medical affairs"
+    client.put("/api/fact-sheet", json={"content": "## Skills\n| Veeva CRM | Claimable |"})
+    assert client.get("/api/scout").json()["settings"]["work_boundary"]["changed"] is True
+    again = client.delete("/api/scout/work/edit").json()["work_boundary"]
+    assert (again["edited"], again["changed"]) == (False, False)
+    with session_factory() as db:
+        assert db.scalar(select(ScoutSettings)).work_boundary["inputs_key"] == ""
+
+
 def test_a_run_counts_today_and_only_one_runs_at_once(client, session_factory):
     _save_settings(client, session_factory)
     response = client.post("/api/scout/runs")

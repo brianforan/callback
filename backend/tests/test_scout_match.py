@@ -15,6 +15,7 @@ from app.scout.match import (
     level_fit,
     parsed_level,
     ruled_out,
+    search_titles,
     spec_from_payload,
     stack_passes,
     stack_place,
@@ -127,6 +128,19 @@ def test_board_queries_come_from_the_stack_or_the_title_phrases():
     phrases = {**payload, "must_have": []}
     assert board_queries(phrases) == ['"internal tools"', '"Clinical Systems"']
     assert board_queries({"description": "Anything at all", "title_families": []}) == []
+    boundary = {"description": "Anything at all", "boundary_titles": ["brand manager"]}
+    assert board_queries(boundary) == ['"brand manager"']
+
+
+def test_titles_picked_win_and_the_boundary_only_fills_in_without_a_stack_rule():
+    boundary = {"description": "Anything", "boundary_titles": ["brand manager"]}
+    assert search_titles(boundary) == ["brand manager"]
+    assert search_titles({**boundary, "title_families": ["medical science liaison"]}) == [
+        "medical science liaison"
+    ]
+    assert search_titles({**boundary, "must_have": ["Veeva CRM"]}) == []
+    # A description naming a technology is a stack rule too.
+    assert search_titles({**boundary, "description": "Laravel work"}) == []
 
 
 def test_a_us_location_narrows_the_job_boards_to_the_us():

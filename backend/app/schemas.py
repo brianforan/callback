@@ -36,6 +36,7 @@ from app.scout.limits import (
     MAX_LABEL_LENGTH,
     MAX_LOCATION_LENGTH,
     MAX_TITLE_PHRASES,
+    MAX_WORK_LENGTH,
     POSTED_WITHIN_DAYS,
     AgencyMode,
     FitMode,
@@ -1467,10 +1468,38 @@ class ScoutRunStart(BaseModel):
         return " ".join(value.split()) or None
 
 
+class ScoutWorkBoundaryOut(BaseModel):
+    """The work Scout read from the profile's baselines, fact sheet and description."""
+
+    work: str
+    # Searched under when no titles are picked and there's no Must use list.
+    titles: list[str]
+    # The person rewrote the work line, so runs keep it rather than reading it again.
+    edited: bool
+    # Edited, and the baselines, fact sheet or description changed since it was read.
+    changed: bool
+
+
+class ScoutWorkIn(BaseModel):
+    """The work line, as the person rewrote it."""
+
+    work: str = Field(max_length=MAX_WORK_LENGTH)
+
+    @field_validator("work")
+    @classmethod
+    def _tidy_work(cls, value: str) -> str:
+        tidy = " ".join(value.split())
+        if not tidy:
+            raise ValueError("say what work you do")
+        return tidy
+
+
 class ScoutSettingsOut(ScoutSettingsIn):
     # What the run will use: the saved limits brought into today's ranges.
     limits: dict[str, int]
     updated_at: datetime | None
+    # None until a run reads it.
+    work_boundary: ScoutWorkBoundaryOut | None = None
 
 
 class ScoutLimitRangeOut(BaseModel):

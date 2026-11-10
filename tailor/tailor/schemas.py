@@ -147,6 +147,9 @@ class ScoutRequest(BaseModel):
     rule_out: list[ShortText] = Field(default_factory=list, max_length=20)
     # Levels wanted (intern, junior, mid, senior, staff, principal, manager). Empty for any.
     levels: list[ShortText] = Field(default_factory=list, max_length=10)
+    # The work the person does, read from their baselines, fact sheet and description by
+    # /pipeline/work. Empty when not known.
+    work: ShortText = ""
     today: date
 
 
@@ -264,6 +267,21 @@ class Judgment(BaseModel):
     stack_ok: bool = True
     agency: ShortText = ""
     reason: LongText
+
+
+class WorkRequest(BaseModel):
+    """What one person's work is, read from their own material, so a search stays inside it."""
+
+    description: str = Field(default="", max_length=600)
+    fact_sheet: str = Field(default="", max_length=100_000)
+    baselines: list[BaselineText] = Field(default_factory=list, max_length=10)
+
+
+class WorkResponse(StageCost):
+    # One sentence naming the line of work, empty when the material doesn't say.
+    work: str
+    # Job title phrases a posting in that work would use, without level words.
+    titles: list[str]
 
 
 class JudgeRequest(BaseModel):

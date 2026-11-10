@@ -38,7 +38,7 @@ from tailor.model import (
     draft_resume,
     streaming_create,
 )
-from tailor.pipeline import StageFailed, judge_posting, write_brief
+from tailor.pipeline import StageFailed, judge_posting, read_work, write_brief
 from tailor.reject_analysis import analyze_rejection
 from tailor.schemas import (
     POSTING_TEXT_MAX,
@@ -66,6 +66,8 @@ from tailor.schemas import (
     SearchUsage,
     TailorRequest,
     TailorResponse,
+    WorkRequest,
+    WorkResponse,
 )
 
 configure_logging()
@@ -191,6 +193,15 @@ def pipeline_judge(request: JudgeRequest) -> JudgeResponse:
     _key_or_503()
     try:
         return judge_posting(get_search_message(), request, get_settings())
+    except StageFailed as exc:
+        raise _failed(str(exc), exc.cost.spent_json()) from exc
+
+
+@app.post("/pipeline/work", response_model=WorkResponse)
+def pipeline_work(request: WorkRequest) -> WorkResponse:
+    _key_or_503()
+    try:
+        return read_work(get_search_message(), request, get_settings())
     except StageFailed as exc:
         raise _failed(str(exc), exc.cost.spent_json()) from exc
 

@@ -37,6 +37,8 @@ from app.schemas import (
     ScoutSettingsIn,
     ScoutSettingsOut,
     ScoutStep,
+    ScoutWorkBoundaryOut,
+    ScoutWorkIn,
 )
 from app.scout.briefs import BriefLimitReached, BriefRefused, briefs_today, queue_brief
 from app.scout.leads import (
@@ -62,6 +64,7 @@ from app.scout.limits import (
 )
 from app.scout.match import clean_levels, effective_must_have, effective_rule_out
 from app.scout.report import build_report
+from app.scout.work import profile_inputs_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/scout", tags=["scout"])
@@ -120,7 +123,20 @@ def _history(db: Session, user: User) -> dict[str, ScoutEngineHistory]:
     return totals
 
 
-def _settings_out(saved: ScoutSettings | None) -> ScoutSettingsOut:
+def _work_out(db: Session, saved: ScoutSettings | None) -> ScoutWorkBoundaryOut | None:
+    boundary = (saved.work_boundary if saved else None) or None
+    if saved is None or boundary is None:
+        return None
+    edited = bool(boundary.get("edited"))
+    changed = edited and boundary.get("inputs_key") != profile_inputs_key(
+        db, saved.profile_id, saved.description
+    )
+    return ScoutWorkBoundaryOut(
+        work=boundary["work"], titles=boundary["titles"], edited=edited, changed=changed
+    )
+
+
+def _settings_out(saved: ScoutSettings | None, db: Session) -> ScoutSettingsOut:
     """The saved settings, or the defaults for someone who hasn't saved any."""
     if saved is None:
         return ScoutSettingsOut(must_have=[], rule_out=[], limits=default_limits(), updated_at=None)
@@ -141,6 +157,7 @@ def _settings_out(saved: ScoutSettings | None) -> ScoutSettingsOut:
         # Settings saved under credits hold limits worked out from the cap; they carry on.
         limits=fit_limits(saved.limits or {}),
         updated_at=saved.updated_at,
+        work_boundary=_work_out(db, saved),
     )
 
 
@@ -178,7 +195,7 @@ def get_scout(user: CurrentUser, profile: CurrentProfile, db: Db) -> ScoutOut:
         posted_within_options=list(POSTED_WITHIN_DAYS),
         description_max_length=MAX_DESCRIPTION_LENGTH,
         technology_names=list(TECHNOLOGY_NAMES),
-        settings=_settings_out(_load(db, profile)),
+        settings=_settings_out(_load(db, profile), db),
         history=_history(db, user),
     )
 
@@ -218,7 +235,41 @@ def save_settings(
         saved.limits = default_limits()
     db.commit()
     logger.info("Saved Scout settings for profile %s", profile.id)
-    return _settings_out(saved)
+    return _settings_out(saved, db)
+
+
+def _saved_work(user: User, profile: Profile, db: Session) -> ScoutSettings:
+    if user.plan != Plan.PREMIUM:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Scout is a premium feature")
+    saved = _load(db, profile)
+    if saved is None or not saved.work_boundary:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Scout hasn't read your work yet. It does at the start of a run.",
+        )
+    return saved
+
+
+@router.put("/work", response_model=ScoutSettingsOut)
+def edit_work(
+    payload: ScoutWorkIn, user: CurrentUser, profile: CurrentProfile, db: Db
+) -> ScoutSettingsOut:
+    """Rewrite the work line. Runs keep it as written until it's read again."""
+    saved = _saved_work(user, profile, db)
+    saved.work_boundary = {**saved.work_boundary, "work": payload.work, "edited": True}
+    db.commit()
+    logger.info("Edited the Scout work line for profile %s", profile.id)
+    return _settings_out(saved, db)
+
+
+@router.delete("/work/edit", response_model=ScoutSettingsOut)
+def read_work_again(user: CurrentUser, profile: CurrentProfile, db: Db) -> ScoutSettingsOut:
+    """Drop the edit, so the next run reads the work from the baselines again."""
+    saved = _saved_work(user, profile, db)
+    saved.work_boundary = {**saved.work_boundary, "edited": False, "inputs_key": ""}
+    db.commit()
+    logger.info("Scout will read the work again for profile %s", profile.id)
+    return _settings_out(saved, db)
 
 
 def _run_out(run: ScoutRun) -> ScoutRunOut:
@@ -283,7 +334,7 @@ def start_run(
     saved = _load(db, profile)
     if saved is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Save your settings before running")
-    settings = _settings_out(saved)
+    settings = _settings_out(saved, db)
     if not settings.description:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Describe the work you're looking for, then save"

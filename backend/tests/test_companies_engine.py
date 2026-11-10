@@ -28,6 +28,7 @@ from app.models import (
     ProfileCompany,
     ProfileCompanyOrigin,
     ScoutRun,
+    ScoutSettings,
     User,
     utcnow,
 )
@@ -40,6 +41,7 @@ from app.scout.limits import (
     limit_errors,
 )
 from app.scout.worker import claim_next, run_one
+from app.workers import TailorUnavailable
 
 TODAY = date(2026, 11, 5)
 _MIGRATION_PATH = Path(__file__).parents[1] / "alembic/versions/0045_scout_title_phrases.py"
@@ -749,12 +751,15 @@ def test_a_stack_rule_is_strict_and_plain_titles_need_no_stack_rule(client, sess
         notes = " ".join(step.detail for step in result.steps)
         assert "1 naming Laravel only as a nice-to-have" in notes
 
-        # With no stack rule and no title phrases, plain engineering titles go to the judge.
+        # With no stack rule, no title phrases and no work boundary, the judge sees every title.
         judge = Judge()
         run_companies(db, user.id, profile.id, _payload(must_have=[]), _stages(judge), TODAY)
         assert {page["title"] for page in judge.calls} == {
             "Senior Software Engineer",
             "Full-Stack Developer",
+            "Laravel Engineer",
+            "Account Executive",
+            "Mechanical Engineer",
             "Backend Developer",
         }
 
@@ -769,6 +774,170 @@ def test_a_stack_rule_is_strict_and_plain_titles_need_no_stack_rule(client, sess
             TODAY,
         )
         assert judge.calls == []
+
+
+PHARMA = (
+    "Own the brand plan for a diabetes medicine, work with sales, market access and agencies, "
+    "and take promotional pieces through medical, legal and regulatory review. "
+) * 8
+
+
+class Work:
+    """tailor's /pipeline/work, faked: one answer, or an error, counting its calls."""
+
+    def __init__(self, answer=None, error=None):
+        self.answer = answer or {
+            "work": "Pharmaceutical brand marketing and pharma sales",
+            "titles": ["brand marketing", "sales representative", "x"],
+        }
+        self.error = error
+        self.calls = []
+
+    def __call__(self, material):
+        self.calls.append(material)
+        if self.error:
+            raise self.error
+        return {"model": "claude-haiku-5-5", "cost_usd": 0.003, "usage": {}, **self.answer}
+
+
+class BriefJudge(Judge):
+    """The judge, also keeping the brief each posting was judged under."""
+
+    def __init__(self):
+        super().__init__()
+        self.briefs = []
+
+    def __call__(self, payload):
+        self.briefs.append(payload["brief"])
+        return super().__call__(payload)
+
+
+def _work_stages(judge, work):
+    return CompanyStages(
+        judge=judge,
+        same_company=lambda payload: {"cost_usd": 0.0, "answers": []},
+        work=work,
+    )
+
+
+def _settings_row(db, user, profile, **changes):
+    row = ScoutSettings(
+        user_id=user.id,
+        profile_id=profile.id,
+        description="anything im desperate",
+        title_families=[],
+        work_modes=[],
+        limits={},
+        **changes,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def test_the_work_boundary_keeps_a_vague_brief_inside_the_profiles_work(client, session_factory):
+    with session_factory() as db:
+        user, profile = _owner(db)
+        row = _settings_row(db, user, profile)
+        _job(db, user, profile, "acme", "Brand Marketing Specialist, Diabetes", text=PHARMA)
+        _job(db, user, profile, "globex", "PHP Developer", text=LARAVEL)
+        _job(db, user, profile, "initech", "Pharmaceutical Sales Representative", text=PHARMA)
+        db.commit()
+        # Not "Brand Manager": the posting parser reads any manager title as people management,
+        # which the default levels leave out.
+        payload = _payload(description="anything im desperate", must_have=[])
+        judge, work = BriefJudge(), Work()
+        result = run_companies(db, user.id, profile.id, payload, _work_stages(judge, work), TODAY)
+        assert {page["title"] for page in judge.calls} == {
+            "Brand Marketing Specialist, Diabetes",
+            "Pharmaceutical Sales Representative",
+        }
+        assert judge.briefs[0]["work"] == "Pharmaceutical brand marketing and pharma sales"
+        assert judge.briefs[0]["title_families"] == ["brand marketing", "sales representative"]
+        notes = " ".join(step.detail for step in result.steps)
+        assert "Read your work as: Pharmaceutical brand marketing and pharma sales" in notes
+        # The read is the run's: two screens and one read.
+        assert result.cost_usd == pytest.approx(0.007)
+        db.refresh(row)
+        assert row.work_boundary["titles"] == ["brand marketing", "sales representative"]
+        assert row.work_boundary["edited"] is False
+
+        # Read once: the same material doesn't call the model again.
+        run_companies(
+            db, user.id, profile.id, _payload(**payload), _work_stages(BriefJudge(), work), TODAY
+        )
+        assert len(work.calls) == 1
+        # A changed fact sheet does.
+        changed = _payload(**{**payload, "fact_sheet": "## Skills\n| Veeva CRM | Claimable |"})
+        run_companies(db, user.id, profile.id, changed, _work_stages(BriefJudge(), work), TODAY)
+        assert len(work.calls) == 2
+        assert work.calls[1]["fact_sheet"].startswith("## Skills")
+
+        # With a Must use list, the boundary's titles don't gate, but the judge still reads it.
+        judge = BriefJudge()
+        laravel = _payload(**{**changed, "must_have": ["Laravel"]})
+        run_companies(db, user.id, profile.id, laravel, _work_stages(judge, work), TODAY)
+        assert [page["title"] for page in judge.calls] == ["PHP Developer"]
+        assert judge.briefs[0]["work"] == "Pharmaceutical brand marketing and pharma sales"
+        assert judge.briefs[0]["title_families"] == []
+
+
+def test_an_edited_work_line_is_kept_and_a_failed_read_uses_the_last(client, session_factory):
+    with session_factory() as db:
+        user, profile = _owner(db)
+        boundary = {
+            "work": "Brand marketing for medicines",
+            "titles": ["brand marketing"],
+            "inputs_key": "from before",
+            "made_at": "2026-11-10T00:00:00+00:00",
+            "edited": True,
+        }
+        row = _settings_row(db, user, profile, work_boundary=boundary)
+        _job(db, user, profile, "acme", "Brand Marketing Specialist, Diabetes", text=PHARMA)
+        db.commit()
+        payload = _payload(description="anything im desperate", must_have=[])
+        judge, work = BriefJudge(), Work()
+        run_companies(db, user.id, profile.id, payload, _work_stages(judge, work), TODAY)
+        assert work.calls == []
+        assert judge.briefs[0]["work"] == "Brand marketing for medicines"
+
+        # Not edited and out of date, but tailor is down: the last one is used, with a note.
+        row.work_boundary = {**boundary, "edited": False}
+        db.commit()
+        judge, work = BriefJudge(), Work(error=TailorUnavailable("Tailor is down."))
+        changed = _payload(**{**payload, "description": "anything at all"})
+        result = run_companies(db, user.id, profile.id, changed, _work_stages(judge, work), TODAY)
+        assert len(work.calls) == 1
+        assert judge.briefs[0]["work"] == "Brand marketing for medicines"
+        notes = " ".join(step.detail for step in result.steps)
+        assert "used what Scout read before" in notes
+
+
+def test_a_run_with_no_work_to_go_on_fails_uncounted(client, session_factory):
+    with session_factory() as db:
+        user, profile = _owner(db)
+        _settings_row(db, user, profile)
+        db.commit()
+        payload = _payload(description="anything im desperate", must_have=[])
+        nothing = Work(answer={"work": "", "titles": []})
+        with pytest.raises(TailorUnavailable, match="couldn't tell what work to look for"):
+            run_companies(db, user.id, profile.id, payload, _work_stages(Judge(), nothing), TODAY)
+        down = Work(error=TailorUnavailable("Tailor is down."))
+        with pytest.raises(TailorUnavailable, match="Couldn't read your work") as raised:
+            run_companies(db, user.id, profile.id, payload, _work_stages(Judge(), down), TODAY)
+        assert raised.value.spent is not None
+
+
+def test_the_work_line_is_part_of_the_brief():
+    from app.scout.judgment_memory import brief_key
+
+    assert brief_key(_payload(work="Pharma brand marketing")) != brief_key(_payload())
+    assert brief_key(_payload(work="")) == brief_key(_payload())
+    boundary = _payload(must_have=[], work="Pharma", boundary_titles=["brand manager"])
+    assert brief_key(boundary) != brief_key({**boundary, "boundary_titles": ["sales manager"]})
+    # With a Must use list, the boundary's titles aren't searched under, so they don't count.
+    strict = {**boundary, "must_have": ["Laravel"]}
+    assert brief_key(strict) == brief_key({**strict, "boundary_titles": ["sales manager"]})
 
 
 def test_a_typed_title_phrase_gates_and_ranks_titles(client, session_factory):

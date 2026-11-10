@@ -188,17 +188,29 @@ OLD_TITLE_PHRASES = {
     "integration": "integration engineer",
 }
 _OLD_TITLE_VALUES = {phrase: value for value, phrase in OLD_TITLE_PHRASES.items()}
+# A profile's work boundary: a line naming its work and title phrases for it, read by a model
+# from its baselines, fact sheet and description (app.scout.work).
+MAX_WORK_LENGTH = 200
+MAX_WORK_TITLES = 10
+
+
+def _tidy_title(phrase: str) -> str:
+    # Each phrase is searched as one quoted phrase, so a double quote can't be part of it.
+    return " ".join(phrase.replace('"', " ").split())
+
+
+def _title_fits(phrase: str) -> bool:
+    return TITLE_PHRASE_MIN_LENGTH <= len(phrase) <= TITLE_PHRASE_MAX_LENGTH
 
 
 def clean_title_phrases(phrases: list[str]) -> list[str]:
-    """Typed title phrases with spaces tidied and double quotes dropped, since each is searched
-    as one quoted phrase. Raises ValueError for a phrase too short or long, or one listed twice
-    ignoring case."""
+    """Typed title phrases with spaces tidied and double quotes dropped. Raises ValueError for
+    a phrase too short or long, or one listed twice ignoring case."""
     cleaned: list[str] = []
     seen: set[str] = set()
     for phrase in phrases:
-        tidy = " ".join(phrase.replace('"', " ").split())
-        if not TITLE_PHRASE_MIN_LENGTH <= len(tidy) <= TITLE_PHRASE_MAX_LENGTH:
+        tidy = _tidy_title(phrase)
+        if not _title_fits(tidy):
             raise ValueError(
                 f"each title phrase must be {TITLE_PHRASE_MIN_LENGTH} to "
                 f"{TITLE_PHRASE_MAX_LENGTH} characters"
@@ -208,6 +220,19 @@ def clean_title_phrases(phrases: list[str]) -> list[str]:
         seen.add(tidy.lower())
         cleaned.append(tidy)
     return cleaned
+
+
+def usable_title_phrases(phrases: list[str]) -> list[str]:
+    """Title phrases from a model, tidied as typed ones are. Ones that break the rules, or
+    repeat one ignoring case, are dropped rather than refused."""
+    usable: list[str] = []
+    seen: set[str] = set()
+    for phrase in phrases:
+        tidy = _tidy_title(str(phrase))
+        if _title_fits(tidy) and tidy.lower() not in seen:
+            seen.add(tidy.lower())
+            usable.append(tidy)
+    return usable
 
 
 def title_keys(phrases: list[str]) -> list[str]:

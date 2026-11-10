@@ -789,7 +789,7 @@ class TailorGap(BaseModel):
 class TailorAdvice(BaseModel):
     """Whether tailoring could improve on the suggested baseline, worked out by plain rules.
 
-    ready is false when there's no baseline or no fact sheet, with what's missing. An empty
+    ready is false when there's no baseline, with what's missing. An empty
     gaps list means a rewrite could only reword the baseline. unfixable names the required
     skills the baseline leaves out that no rewrite could add, since nothing backs them.
     """

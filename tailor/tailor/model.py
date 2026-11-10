@@ -108,7 +108,7 @@ def _system(request: TailorRequest) -> list[dict[str, Any]]:
         },
         {
             "type": "text",
-            "text": f"<fact_sheet>\n{request.fact_sheet}\n</fact_sheet>",
+            "text": f"<fact_sheet>\n{request.fact_sheet.strip() or 'None.'}\n</fact_sheet>",
             "cache_control": {"type": "ephemeral"},
         },
     ]

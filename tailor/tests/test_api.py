@@ -147,6 +147,17 @@ def test_prompt_caches_rules_and_fact_sheet(monkeypatch, client, body, resume_te
     assert "<previous_attempt_rejected>" not in user
 
 
+def test_the_fact_sheet_is_optional(monkeypatch, client, body, resume_tex):
+    fake = FakeModel(_message({"tex": resume_tex, "changelog": [], "gaps": []}))
+    _use(monkeypatch, fake)
+    del body["fact_sheet"]
+
+    assert client.post("/tailor", json=body).status_code == 200
+
+    _, fact_sheet = fake.calls[0]["system"]
+    assert fact_sheet["text"] == "<fact_sheet>\nNone.\n</fact_sheet>"
+
+
 def test_retry_feedback_reaches_the_prompt(monkeypatch, client, body, resume_tex):
     fake = FakeModel(_message({"tex": resume_tex, "changelog": [], "gaps": []}))
     _use(monkeypatch, fake)

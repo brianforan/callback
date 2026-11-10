@@ -285,10 +285,13 @@ def test_posting_says_whether_tailoring_could_help(client):
         "unfixable": [],
     }
 
+    # Without a fact sheet only other baselines back a gap, and here there are none.
     _upload_baseline(client)
     advice = client.get(f"/api/postings/{posting['id']}").json()["tailor_advice"]
-    assert advice["ready"] is False
-    assert advice["missing"].startswith("Fill in your fact sheet first")
+    assert advice["ready"] is True
+    assert advice["missing"] is None
+    assert advice["gaps"] == []
+    assert "Redis" in advice["unfixable"]
 
     client.put("/api/fact-sheet", json={"content": FACT_SHEET})
     advice = client.get(f"/api/postings/{posting['id']}").json()["tailor_advice"]
@@ -301,11 +304,8 @@ def test_posting_says_whether_tailoring_could_help(client):
     assert advice["unfixable"] == ["Kafka"]
 
 
-def test_tailoring_needs_a_fact_sheet_and_a_baseline(client):
+def test_tailoring_needs_a_baseline(client):
     posting = _posting(client)
-    assert client.post(f"/api/postings/{posting['id']}/tailor").status_code == 422
-
-    client.put("/api/fact-sheet", json={"content": FACT_SHEET})
     response = client.post(f"/api/postings/{posting['id']}/tailor")
     assert response.status_code == 422
     assert "baseline" in response.json()["detail"]
@@ -437,6 +437,19 @@ def test_a_passing_result_is_saved_and_staged(client, session_factory):
     assert resume["source_tex"] == TAILORED_TEX
     with session_factory() as db:
         assert db.get(TailorJob, job_id).usage["cache_read_input_tokens"] == 3000
+
+
+def test_tailoring_runs_without_a_fact_sheet(client, session_factory):
+    _upload_baseline(client)
+    posting = _posting(client)
+    assert client.post(f"/api/postings/{posting['id']}/tailor").status_code == 202
+    sender = FakeSender(_result(BASELINE_TEX))
+
+    _work(session_factory, sender)
+
+    assert sender.payloads[0]["fact_sheet"] == ""
+    status = client.get(f"/api/postings/{posting['id']}/tailor").json()["job"]
+    assert status["status"] == "done"
 
 
 def test_a_failed_check_is_retried_once_with_the_reasons(client, session_factory):

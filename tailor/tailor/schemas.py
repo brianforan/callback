@@ -37,7 +37,7 @@ class TailorRequest(BaseModel):
     posting: Posting
     gaps: list[Gap] = Field(default_factory=list, max_length=100)
     mix: list[MixSkill] = Field(default_factory=list, max_length=50)
-    fact_sheet: str = Field(min_length=1, max_length=100_000)
+    fact_sheet: str = Field(default="", max_length=100_000)
     rules: str = Field(min_length=1, max_length=20_000)
     # Why the previous attempt was turned down, when this is a retry.
     feedback: list[Line] = Field(default_factory=list, max_length=20)

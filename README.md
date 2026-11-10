@@ -57,7 +57,7 @@ The full design is in [docs/scout_spec.md](docs/scout_spec.md).
 
 - **Baselines:** up to three resumes you start from for different kinds of jobs, such as backend or full-stack. Rules say which jobs each suits: role types and levels, focus skills, deal-breakers, most years asked and a minimum score. Every job names the baseline to start from.
 - **All versions:** every `.tex` or PDF you've uploaded. Identical content is recognised and reused. Each `.tex` gets a PDF, compiled in a sandbox. A PDF resume is read for matching but can't be edited or tailored.
-- **Fact sheet:** what you can truthfully claim, in your own words, as one Markdown document. Tailoring treats it as the rules.
+- **Fact sheet:** what you can truthfully claim, in your own words, as one Markdown document. Tailoring treats it as the rules. It's optional: without one, tailoring only claims what your baselines already say.
 - **Skills:** what match scores, missing skills and Insights look for in postings and resumes. Turn on the built-in software skills (Python, React, PostgreSQL, AWS and about a hundred more), add your own field's skills with the other ways postings write them ("AP" for Accounts Payable), or both. Saved postings are read again with your skills in the background.
 
 **Tailor**, in a job's drawer, rewrites the best baseline for that job using only what your fact sheet allows. It usually takes a minute or two. Before a result is kept, code checks that every job title, company and date matches the baseline, that every technology it names is backed by the baseline, your fact sheet or another baseline, and that it scores no lower than the baseline. A result that fails is retried once, then shown with its reasons and not saved.

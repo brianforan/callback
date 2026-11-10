@@ -420,13 +420,9 @@ def tailor_advice(
         variant = next((item for item in baselines.variants if item.id == pick.resume_id), None)
     if baselines is None or pick is None or variant is None:
         return TailorAdvice(ready=False, missing="Add a baseline on the Resumes page first.")
+    # Without a fact sheet, tailoring can still borrow what the other baselines back.
     if skills is None:
-        return TailorAdvice(
-            ready=False,
-            missing=(
-                "Fill in your fact sheet first, under Resumes. Tailoring only claims what's there."
-            ),
-        )
+        skills = FactSheetSkills(technologies={}, phrases={})
     match = score_job(baselines.profile, job, only=variant)
     checklist = match.checklist if match else []
     gaps = closable_gaps(checklist, pick.mix, skills)

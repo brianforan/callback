@@ -230,9 +230,9 @@ def _gather(db: Session, job: TailorJob, today: date) -> _Inputs | str:
         return "The account was deleted."
     # The profile the job was started under, so it uses that profile's claims and baselines.
     owner = profile_for_work(db, user, job.profile_id)
+    # The fact sheet is optional. Without one, only the baselines back a claim.
     sheet = db.scalar(select(FactSheet).where(FactSheet.profile_id == owner.id))
-    if sheet is None or not sheet.content.strip():
-        return "Your fact sheet is empty. Fill it in under Resumes, Fact sheet."
+    fact_sheet = sheet.content if sheet else ""
 
     resumes = db.scalars(select(Resume).where(Resume.profile_id == owner.id)).all()
     loaded = load_baselines(resumes, today)
@@ -253,7 +253,7 @@ def _gather(db: Session, job: TailorJob, today: date) -> _Inputs | str:
         },
         "gaps": gap_lines(match.checklist)[:_MAX_GAPS] if match else [],
         "mix": mix[:_MAX_MIX],
-        "fact_sheet": sheet.content,
+        "fact_sheet": fact_sheet,
         "rules": TAILORING_RULES,
         "feedback": [],
     }
@@ -263,7 +263,7 @@ def _gather(db: Session, job: TailorJob, today: date) -> _Inputs | str:
         source=source,
         baselines=baselines,
         facts=facts,
-        skills=parse_skills_status(sheet.content),
+        skills=parse_skills_status(fact_sheet),
     )
 
 

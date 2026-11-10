@@ -18,7 +18,6 @@ from app.app_config import daily_limit
 from app.deps import CurrentProfile, CurrentUser, Db
 from app.models import (
     TAILOR_ACTIVE,
-    FactSheet,
     JobPosting,
     Resume,
     TailorJob,
@@ -106,7 +105,8 @@ def start_tailoring(
 ) -> TailorStatusOut:
     """Queue a tailoring of the posting's suggested baseline. The result is staged when done.
 
-    The baseline and fact sheet come from the active profile, and the job keeps that profile.
+    The baseline and fact sheet (if any) come from the active profile, and the job keeps that
+    profile.
     """
     posting = _get_posting(db, user, posting_id)
     if posting.applications:
@@ -122,12 +122,6 @@ def start_tailoring(
         raise HTTPException(
             HTTPStatus.UNPROCESSABLE_CONTENT,
             "Add the posting's text first, so there's something to tailor to",
-        )
-    sheet = db.scalar(select(FactSheet).where(FactSheet.profile_id == profile.id))
-    if sheet is None or not sheet.content.strip():
-        raise HTTPException(
-            HTTPStatus.UNPROCESSABLE_CONTENT,
-            "Fill in your fact sheet first, under Resumes. Tailoring only claims what's there",
         )
     baselines = load_baselines(
         db.scalars(select(Resume).where(Resume.profile_id == profile.id)).all(), date.today()

@@ -5,9 +5,6 @@ services:
   api:
     environment:
       COOKIE_SECURE: "true"
-      # Closed by default on a public host. Anyone could otherwise sign up. Set
-      # PUBLIC_REGISTRATION=true in .env to open it.
-      REGISTRATION_ENABLED: ${PUBLIC_REGISTRATION:-false}
       # Closed by default on a public host. Anyone could otherwise log applications
       # to this account. Set PUBLIC_DEFAULT_USER_ID in .env to open it.
       DEFAULT_USER_ID: ${PUBLIC_DEFAULT_USER_ID:-}

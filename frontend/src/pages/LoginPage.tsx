@@ -64,9 +64,6 @@ export function LoginPage() {
               </ThemeIcon>
               <Text fw={700}>Callback</Text>
             </Group>
-            <Text size="sm" c="dimmed">
-              See which applications and resumes get you a call back.
-            </Text>
             {active.isError && (
               <Alert color="red" variant="light" p="xs">
                 {active.error.message}

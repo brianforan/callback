@@ -1,10 +1,10 @@
 # Skills, role types and levels for any field
 
 Status: spec, 2026-11-10, revised the same day for shared field pools, catalog suggestions,
-model suggestions only if needed, and employer rank words. Chunks 1 and 2 are built (2026-11-10);
-the rest isn't. It changes how postings are parsed and scored (`app/postings/parser.py`,
-`app/resumes/matching.py`, `app/resumes/structure.py`, `app/vocabulary.py`) and everything that
-reads their skills.
+model suggestions only if needed, and employer rank words. Chunks 1, 2 and 9 are built
+(2026-11-10); the rest isn't. It changes how postings are parsed and scored
+(`app/postings/parser.py`, `app/resumes/matching.py`, `app/resumes/structure.py`,
+`app/vocabulary.py`) and everything that reads their skills.
 
 ## Why
 
@@ -418,9 +418,9 @@ Resumes has a fourth tab, **Skills**, for the active profile:
 8. **Scout and tailoring.** The Must use picker, the code gate and tailoring's check read the
    active profile's vocabulary, and Scout's no-titles fallback for profiles without the software
    list uses the field's role types.
-9. **Scout's title phrases.** Editable chips, phrases stored per profile, the migration of
-   `title_families`, phrase matching in the title gate, rank and board searches, the brief-key
-   mapping and fencing in tailor's prompts. Needs nothing from chunks 3–8, so it can be built
+9. **Scout's title phrases.** Built 2026-11-10. Editable chips, phrases stored per profile, the
+   migration of `title_families`, phrase matching in the title gate, rank and board searches, the
+   brief-key mapping and fencing in tailor's prompts. Needs nothing from chunks 3–8, so it can be built
    before them; only the fallback by field waits for chunks 4 and 8.
 
 Each chunk is usable on its own, and the README changes with each.

@@ -177,10 +177,11 @@ def _brief_lines(request: ScoutRequest) -> list[str]:
         if request.rule_out
         else "Rule out: nothing"
     )
+    titles = _fence(", ".join(request.title_families), "search_brief")
     return [
         f"Today is {request.today.isoformat()}.",
         f"What the person wants: {_fence(request.description, 'search_brief')}",
-        f"Title families: {', '.join(request.title_families) or 'any, from the brief'}",
+        f"Title families: {titles or 'any, from the brief'}",
         f"Work modes: {', '.join(request.work_modes) or 'any'}",
         f"Location: {_fence(request.location, 'search_brief') or 'anywhere'}",
         f"Relocation: {_RELOCATION[request.relocation]}",

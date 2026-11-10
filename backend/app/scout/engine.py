@@ -61,7 +61,6 @@ from app.models import (
 from app.postings.parser import company_key
 from app.schemas import ScoutServiceResult
 from app.scout.filters import (
-    _TITLE_FAMILY_QUERIES,
     _abroad,
     _known,
     _Tally,
@@ -79,6 +78,7 @@ from app.scout.judgment_memory import (
     store_facts,
     text_key,
 )
+from app.scout.limits import title_query
 from app.scout.match import (
     MIN_TEXT,
     LevelFit,
@@ -121,7 +121,7 @@ _MAX_POSTING_TEXT = 12_000
 _DISMISSED_TO_SKIP = 3
 _ON_SITE = ("onsite", "hybrid")
 # Plain engineering titles, kept for the judge when a brief has no stack rule and no title
-# families, since a "Senior Software Engineer" posting rarely puts the work in its title.
+# phrases, since a "Senior Software Engineer" posting rarely puts the work in its title.
 _ENGINEERING_TITLE = re.compile(
     r"\b(?:developer|programmer|swe"
     r"|(?:software|back[- ]?end|front[- ]?end|full[- ]?stack|web|application|platform|php|"
@@ -429,9 +429,7 @@ class _Run:
         self.us_only = board_location(self.location) == "us"
         self.wanted_states = states_named(self.location) if self.us_only else set()
         self.families = [
-            parse_query(_TITLE_FAMILY_QUERIES[family])
-            for family in payload.get("title_families") or []
-            if family in _TITLE_FAMILY_QUERIES
+            parse_query(title_query(phrase)) for phrase in payload.get("title_families") or []
         ]
         known_urls, known_pairs = _known(payload)
         self.known_urls = known_urls | {link for url in known_urls if (link := catalog_url(url))}
@@ -591,11 +589,7 @@ class _Run:
                 *(CatalogJob.text.ilike(f"%{word}%") for word in words),
             )
         else:
-            words = [
-                phrase.strip('"')
-                for family in self.payload.get("title_families") or []
-                if (phrase := _TITLE_FAMILY_QUERIES.get(family))
-            ] or list(_ENGINEERING_WORDS)
+            words = list(self.payload.get("title_families") or []) or list(_ENGINEERING_WORDS)
             matches = or_(
                 CatalogJob.company_id.in_(list(listed)),
                 *(CatalogJob.title.ilike(f"%{word}%") for word in words),
@@ -694,7 +688,7 @@ class _Run:
         return None
 
     def _title_fits(self, title: str) -> bool:
-        """With no stack rule: a title family in the title, or with none picked, a plain
+        """With no stack rule: a title phrase in the title, or with none picked, a plain
         engineering title the judge will decide on."""
         if self.families:
             return any(search.matches_title(title, "") for search in self.families)

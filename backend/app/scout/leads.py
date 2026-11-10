@@ -33,7 +33,7 @@ from app.postings.parser import canonical_url, company_key
 from app.postings.store import create_posting, find_by_url
 from app.resumes.matching import facts_from_posting
 from app.resumes.variants import load_baselines, pick_baseline
-from app.scout.limits import SCOUT_SOURCE, lead_posting_text
+from app.scout.limits import SCOUT_SOURCE, lead_posting_text, title_keys
 
 logger = logging.getLogger(__name__)
 
@@ -337,6 +337,14 @@ def declined_jobs(db: Session, user_id: uuid.UUID, limit: int) -> list[dict[str,
 _JUDGED_BY = ("description", "fit_mode", "title_families", "work_modes", "location")
 
 
+def _judged(settings: dict[str, Any]) -> dict[str, Any]:
+    """The settings in _JUDGED_BY, with title phrases read as brief keys read them, so a run
+    from before they could be typed compares equal to one with the same titles since."""
+    judged = {key: settings.get(key) for key in _JUDGED_BY}
+    judged["title_families"] = title_keys(settings.get("title_families") or [])
+    return judged
+
+
 def passed_pages(db: Session, run: ScoutRun, limit: int) -> list[str]:
     """Pages earlier runs opened and didn't keep, under the same idea of a fit, newest first.
 
@@ -344,8 +352,7 @@ def passed_pages(db: Session, run: ScoutRun, limit: int) -> list[str]:
     a different description, fit setting, titles, work modes or location, since what didn't fit
     then may fit now.
     """
-    settings = run.settings or {}
-    judged = {key: settings.get(key) for key in _JUDGED_BY}
+    judged = _judged(run.settings or {})
     earlier = db.scalars(
         select(ScoutRun)
         .where(
@@ -366,8 +373,7 @@ def passed_pages(db: Session, run: ScoutRun, limit: int) -> list[str]:
     ).all()
     pages: dict[str, str] = {}
     for other in earlier:
-        other_settings = other.settings or {}
-        if any(other_settings.get(key) != value for key, value in judged.items()):
+        if _judged(other.settings or {}) != judged:
             continue
         kept = set()
         for lead in other.leads or []:

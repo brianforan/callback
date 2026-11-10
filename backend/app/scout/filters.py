@@ -11,6 +11,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from app.postings.parser import canonical_url, company_key
+from app.scout.limits import title_query
 from app.scout.match import spec_from_payload
 from app.workers import TailorUnavailable
 
@@ -81,15 +82,6 @@ _IN_US = (
     re.compile(rf"\b(?:USA?|U\.S\.(?:A\.)?|United States|{_US_STATES})(?![\w.])", re.I),
     re.compile(rf"(?:^|[\s,(])(?:{_US_CODES}|E[SD]?T|P[SD]?T|C[SD]?T|M[SD]?T)(?![\w.])"),
 )
-_TITLE_FAMILY_QUERIES = {
-    "forward_deployed": '"forward deployed"',
-    "solutions": '"solutions engineer"',
-    "implementation": '"implementation engineer"',
-    "internal_tools": '"internal tools"',
-    "business_systems": '"business systems"',
-    "automation": '"automation engineer"',
-    "integration": '"integration engineer"',
-}
 
 
 @dataclass
@@ -186,14 +178,10 @@ def _abroad(page_location: str, us_only: bool) -> bool:
 
 
 def board_queries(payload: dict[str, Any]) -> list[str]:
-    """Job board searches for a brief: each Must use technology, else a phrase for each title
-    family picked, up to a few searches."""
+    """Job board searches for a brief: each Must use technology, else each title phrase as an
+    exact phrase, up to a few searches."""
     spec = spec_from_payload(payload)
     queries = [f'"{name}"' if " " in name else name for name in spec.must_have]
     if not queries:
-        queries = [
-            _TITLE_FAMILY_QUERIES[family]
-            for family in payload.get("title_families") or []
-            if family in _TITLE_FAMILY_QUERIES
-        ]
+        queries = [title_query(phrase) for phrase in payload.get("title_families") or []]
     return list(dict.fromkeys(queries))[:_MAX_BOARD_QUERIES]

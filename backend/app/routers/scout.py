@@ -196,7 +196,7 @@ def save_settings(
         saved = ScoutSettings(user_id=user.id, profile_id=profile.id)
         db.add(saved)
     saved.description = payload.description
-    saved.title_families = [family.value for family in payload.title_families]
+    saved.title_families = payload.title_families
     saved.work_modes = [mode.value for mode in payload.work_modes]
     saved.location = payload.location
     saved.posted_within_days = payload.posted_within_days

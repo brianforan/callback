@@ -17,18 +17,6 @@ class Plan(StrEnum):
     PREMIUM = "premium"
 
 
-class TitleFamily(StrEnum):
-    """Job titles that tend to mean building with or for internal teams."""
-
-    FORWARD_DEPLOYED = "forward_deployed"
-    SOLUTIONS = "solutions"
-    IMPLEMENTATION = "implementation"
-    INTERNAL_TOOLS = "internal_tools"
-    BUSINESS_SYSTEMS = "business_systems"
-    AUTOMATION = "automation"
-    INTEGRATION = "integration"
-
-
 class FitMode(StrEnum):
     """How close a fit a job must be for the agent to keep it."""
 
@@ -182,6 +170,60 @@ POSTED_WITHIN_DAYS = (7, 14, 30)
 MAX_DESCRIPTION_LENGTH = 600
 MAX_LOCATION_LENGTH = 120
 MAX_LABEL_LENGTH = 60
+
+# Titles to search under are phrases each profile types (docs/skills_spec.md, Scout's title
+# phrases).
+MAX_TITLE_PHRASES = 15
+TITLE_PHRASE_MIN_LENGTH = 2
+TITLE_PHRASE_MAX_LENGTH = 60
+# The seven fixed title families they replaced, each with the phrase it searched for. Briefs
+# saved before then are keyed by these values (title_keys).
+OLD_TITLE_PHRASES = {
+    "forward_deployed": "forward deployed",
+    "solutions": "solutions engineer",
+    "implementation": "implementation engineer",
+    "internal_tools": "internal tools",
+    "business_systems": "business systems",
+    "automation": "automation engineer",
+    "integration": "integration engineer",
+}
+_OLD_TITLE_VALUES = {phrase: value for value, phrase in OLD_TITLE_PHRASES.items()}
+
+
+def clean_title_phrases(phrases: list[str]) -> list[str]:
+    """Typed title phrases with spaces tidied and double quotes dropped, since each is searched
+    as one quoted phrase. Raises ValueError for a phrase too short or long, or one listed twice
+    ignoring case."""
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for phrase in phrases:
+        tidy = " ".join(phrase.replace('"', " ").split())
+        if not TITLE_PHRASE_MIN_LENGTH <= len(tidy) <= TITLE_PHRASE_MAX_LENGTH:
+            raise ValueError(
+                f"each title phrase must be {TITLE_PHRASE_MIN_LENGTH} to "
+                f"{TITLE_PHRASE_MAX_LENGTH} characters"
+            )
+        if tidy.lower() in seen:
+            raise ValueError(f'"{tidy}" is listed twice')
+        seen.add(tidy.lower())
+        cleaned.append(tidy)
+    return cleaned
+
+
+def title_keys(phrases: list[str]) -> list[str]:
+    """Title phrases as earlier verdicts are keyed by them, sorted. Each of the seven old phrases
+    reads as its old value, so a brief whose titles didn't change keeps its key; any other phrase
+    is trimmed and lowercased."""
+    keys = []
+    for phrase in phrases:
+        key = phrase.strip().lower()
+        keys.append(_OLD_TITLE_VALUES.get(key, key))
+    return sorted(keys)
+
+
+def title_query(phrase: str) -> str:
+    """A title phrase as a search for that exact phrase."""
+    return f'"{phrase}"'
 
 
 def default_limits(engine: str = DEFAULT_ENGINE) -> dict[str, int]:

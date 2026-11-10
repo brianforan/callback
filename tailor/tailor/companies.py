@@ -151,11 +151,12 @@ DONE."""
 
 
 def _discover_brief(request: DiscoverRequest) -> str:
+    titles = _fence(", ".join(request.title_families), "search_brief")
     lines = [
         f"Today is {request.today.isoformat()}.",
         "<search_brief>",
         f"What the person wants: {_fence(request.description, 'search_brief')}",
-        f"Title families: {', '.join(request.title_families) or 'any, from the brief'}",
+        f"Title families: {titles or 'any, from the brief'}",
         f"Work modes: {', '.join(request.work_modes) or 'any'}",
         f"Location: {_fence(request.location, 'search_brief') or 'anywhere'}",
         f"Relocation: {_RELOCATION[request.relocation]}",

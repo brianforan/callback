@@ -42,6 +42,7 @@ from app.models import (
     ScoutRun,
     utcnow,
 )
+from app.scout.limits import title_keys
 from app.scout.match import level_from_value, parsed_level, spec_from_payload
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,7 @@ def brief_key(payload: dict[str, Any]) -> str:
     is a new key, so earlier verdicts stop applying."""
     parts = {
         "description": payload.get("description") or "",
-        "title_families": sorted(payload.get("title_families") or []),
+        "title_families": title_keys(payload.get("title_families") or []),
         "work_modes": sorted(payload.get("work_modes") or []),
         "location": payload.get("location") or "",
         "fit_mode": payload.get("fit_mode") or "",

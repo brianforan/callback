@@ -34,7 +34,7 @@ def _make_premium(session_factory, email: str = "owner@example.com") -> None:
 def _payload(**changes):
     payload = {
         "description": "  Internal tools work with operations teams  ",
-        "title_families": ["internal_tools", "automation", "internal_tools"],
+        "title_families": [" internal  tools ", 'automation "engineer"'],
         "work_modes": ["remote"],
         "location": "  Philadelphia, PA  ",
         "posted_within_days": 14,
@@ -89,7 +89,7 @@ def test_premium_user_saves_and_others_dont_see_it(client, other_client, session
     assert response.status_code == 200
     saved = response.json()
     assert saved["description"] == "Internal tools work with operations teams"
-    assert saved["title_families"] == ["internal_tools", "automation"]
+    assert saved["title_families"] == ["internal tools", "automation engineer"]
     assert saved["location"] == "Philadelphia, PA"
     assert saved["fit_mode"] == "wide"
     assert saved["agency_mode"] == "find_employer"
@@ -126,6 +126,27 @@ def test_save_rejects_out_of_range_values(client, session_factory):
     assert client.put("/api/scout/settings", json=long_text).status_code == 422
     long_place = _payload(location="x" * 121)
     assert client.put("/api/scout/settings", json=long_place).status_code == 422
+
+
+def test_title_phrases_are_checked_before_saving(client, session_factory):
+    _make_premium(session_factory)
+
+    def save(phrases):
+        return client.put("/api/scout/settings", json=_payload(title_families=phrases))
+
+    fifteen = [f"clinical systems {n}" for n in range(15)]
+    assert save(fifteen).json()["title_families"] == fifteen
+    assert save(["QA", "x" * 60]).status_code == 200
+    assert save([*fifteen, "one more"]).status_code == 422
+    short = save(["GxP", " a "])
+    assert short.status_code == 422
+    assert "2 to 60 characters" in short.json()["detail"][0]["msg"]
+    assert save(['""']).status_code == 422
+    assert save(["x" * 61]).status_code == 422
+    twice = save(["Validation Engineer", "validation  engineer"])
+    assert twice.status_code == 422
+    assert "listed twice" in twice.json()["detail"][0]["msg"]
+    assert client.get("/api/scout").json()["settings"]["title_families"] == ["QA", "x" * 60]
 
 
 def _save_settings(client, session_factory, **changes):
@@ -458,6 +479,24 @@ def test_passed_pages_come_only_from_runs_with_the_same_brief(client, session_fa
         current = run(brief, [], [], datetime(2026, 11, 3, tzinfo=UTC))
         db.commit()
         assert passed_pages(db, current, 200) == ["https://a.io/passed"]
+
+        # A run from before title phrases had the old values, and the same titles still match.
+        run(
+            {**brief, "title_families": ["internal_tools", "automation"]},
+            ["https://a.io/old-titles"],
+            [],
+            datetime(2026, 11, 4, tzinfo=UTC),
+        )
+        run(
+            {**brief, "title_families": ["internal tools", "clinical systems"]},
+            ["https://a.io/other-titles"],
+            [],
+            datetime(2026, 11, 5, tzinfo=UTC),
+        )
+        titled = {**brief, "title_families": ["Automation Engineer", "internal tools"]}
+        current = run(titled, [], [], datetime(2026, 11, 6, tzinfo=UTC))
+        db.commit()
+        assert passed_pages(db, current, 200) == ["https://a.io/old-titles"]
 
 
 def test_an_expired_listing_is_put_away_without_teaching_runs(client, session_factory):

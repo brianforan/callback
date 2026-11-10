@@ -35,12 +35,13 @@ from app.scout.limits import (
     MAX_DESCRIPTION_LENGTH,
     MAX_LABEL_LENGTH,
     MAX_LOCATION_LENGTH,
+    MAX_TITLE_PHRASES,
     POSTED_WITHIN_DAYS,
     AgencyMode,
     FitMode,
     Plan,
     Relocation,
-    TitleFamily,
+    clean_title_phrases,
 )
 from app.scout.match import MAX_TECHNOLOGIES, clean_technologies
 from app.security import MIN_PASSWORD_LENGTH
@@ -1403,7 +1404,8 @@ class ScoutSettingsIn(BaseModel):
     """What to look for and where a run must stop."""
 
     description: str = Field(default="", max_length=MAX_DESCRIPTION_LENGTH)
-    title_families: list[TitleFamily] = Field(default_factory=list, max_length=len(TitleFamily))
+    # Titles to search under: phrases the profile typed, each searched as an exact phrase.
+    title_families: list[str] = Field(default_factory=list, max_length=MAX_TITLE_PHRASES)
     work_modes: list[WorkMode] = Field(default_factory=list, max_length=len(WorkMode))
     # A city, region or country, such as "Philadelphia, PA" or "US East Coast". Empty for anywhere.
     location: str = Field(default="", max_length=MAX_LOCATION_LENGTH)
@@ -1428,7 +1430,12 @@ class ScoutSettingsIn(BaseModel):
     def _strip_text(cls, value: str) -> str:
         return value.strip()
 
-    @field_validator("title_families", "work_modes", "levels")
+    @field_validator("title_families")
+    @classmethod
+    def _clean_title_phrases(cls, values: list[str]) -> list[str]:
+        return clean_title_phrases(values)
+
+    @field_validator("work_modes", "levels")
     @classmethod
     def _dedupe(cls, values: list[StrEnum]) -> list[StrEnum]:
         return list(dict.fromkeys(values))

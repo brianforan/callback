@@ -703,14 +703,6 @@ export interface TailorStatus {
 }
 
 export type Plan = 'free' | 'premium';
-export type TitleFamily =
-  | 'forward_deployed'
-  | 'solutions'
-  | 'implementation'
-  | 'internal_tools'
-  | 'business_systems'
-  | 'automation'
-  | 'integration';
 export type FitMode = 'wide' | 'balanced' | 'close';
 /** Scout has one engine now, stored as 'companies'. Older runs may name the others. */
 export type Engine = 'agent' | 'pipeline' | 'companies';
@@ -740,7 +732,8 @@ export interface ScoutLimit {
 
 export interface ScoutSettingsPayload {
   description: string;
-  title_families: TitleFamily[];
+  /** Titles to search under: phrases the profile typed, each matched exactly. */
+  title_families: string[];
   work_modes: WorkMode[];
   location: string;
   posted_within_days: number | null;

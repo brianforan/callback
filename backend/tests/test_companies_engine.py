@@ -3,8 +3,10 @@
 The engine (app.scout.engine) is the only one now, and reads the whole catalog, not just a
 profile's list (docs/scout_spec.md)."""
 
+import importlib.util
 import json
 from datetime import date, timedelta
+from pathlib import Path
 
 import httpx
 import pytest
@@ -32,6 +34,7 @@ from app.models import (
 from app.profiles import default_profile
 from app.scout.engine import CompanyStages, run_companies, states_named
 from app.scout.limits import (
+    OLD_TITLE_PHRASES,
     default_limits,
     fit_limits,
     limit_errors,
@@ -39,6 +42,10 @@ from app.scout.limits import (
 from app.scout.worker import claim_next, run_one
 
 TODAY = date(2026, 11, 5)
+_MIGRATION_PATH = Path(__file__).parents[1] / "alembic/versions/0045_scout_title_phrases.py"
+_MIGRATION_SPEC = importlib.util.spec_from_file_location("scout_title_phrases", _MIGRATION_PATH)
+MIGRATION = importlib.util.module_from_spec(_MIGRATION_SPEC)
+_MIGRATION_SPEC.loader.exec_module(MIGRATION)
 LARAVEL = (
     "We build our internal tools in Laravel and Vue. You'll own the back office: billing, "
     "support tooling and the integrations our operations team runs on. "
@@ -742,7 +749,7 @@ def test_a_stack_rule_is_strict_and_plain_titles_need_no_stack_rule(client, sess
         notes = " ".join(step.detail for step in result.steps)
         assert "1 naming Laravel only as a nice-to-have" in notes
 
-        # With no stack rule and no title families, plain engineering titles go to the judge.
+        # With no stack rule and no title phrases, plain engineering titles go to the judge.
         judge = Judge()
         run_companies(db, user.id, profile.id, _payload(must_have=[]), _stages(judge), TODAY)
         assert {page["title"] for page in judge.calls} == {
@@ -751,17 +758,45 @@ def test_a_stack_rule_is_strict_and_plain_titles_need_no_stack_rule(client, sess
             "Backend Developer",
         }
 
-        # With title families and no stack rule, the title must name one of them.
+        # With title phrases and no stack rule, the title must name one of them.
         judge = Judge()
         run_companies(
             db,
             user.id,
             profile.id,
-            _payload(must_have=[], title_families=["internal_tools"]),
+            _payload(must_have=[], title_families=["internal tools"]),
             _stages(judge),
             TODAY,
         )
         assert judge.calls == []
+
+
+def test_a_typed_title_phrase_gates_and_ranks_titles(client, session_factory):
+    with session_factory() as db:
+        user, profile = _owner(db)
+        _job(db, user, profile, "acme", "Laravel Data Analyst")
+        _job(db, user, profile, "globex", "Laravel Clinical Systems Analyst")
+        _job(db, user, profile, "initech", "Senior Software Engineer", text=OTHER)
+        _job(db, user, profile, "hooli", "Clinical Systemsx Lead", text=OTHER)
+        db.commit()
+
+        # No stack rule: only a title with the exact phrase, in any case, reaches the judge.
+        judge = Judge()
+        payload = _payload(must_have=[], title_families=["Clinical systems"])
+        run_companies(db, user.id, profile.id, payload, _stages(judge), TODAY)
+        assert [page["title"] for page in judge.calls] == ["Laravel Clinical Systems Analyst"]
+
+        # With a stack rule, a title naming a phrase is judged first, whichever phrase it is.
+        for phrase, first in (
+            ("clinical systems", "Laravel Clinical Systems Analyst"),
+            ("data analyst", "Laravel Data Analyst"),
+        ):
+            judge = Judge()
+            payload = _payload(must_have=["Laravel"], title_families=[phrase])
+            run_companies(db, user.id, profile.id, payload, _stages(judge), TODAY)
+            titles = [page["title"] for page in judge.calls]
+            assert titles[0] == first
+            assert set(titles) == {"Laravel Data Analyst", "Laravel Clinical Systems Analyst"}
 
 
 def test_levels_are_flexible_by_one_rung_and_learned_from_wrong_level(client, session_factory):
@@ -1563,6 +1598,42 @@ def test_relocation_changes_the_brief_only_when_set():
 
     assert brief_key(_payload()) == brief_key(_payload(relocation="none"))
     assert brief_key(_payload(relocation="metro")) != brief_key(_payload())
+
+
+def test_old_title_families_keep_their_brief_key_as_phrases():
+    from app.scout.judgment_memory import brief_key
+
+    old = _payload(title_families=["internal_tools", "automation"])
+    migrated = _payload(title_families=[MIGRATION.PHRASES[v] for v in old["title_families"]])
+    assert migrated["title_families"] == ["internal tools", "automation engineer"]
+    assert brief_key(migrated) == brief_key(old)
+    assert brief_key(_payload(title_families=[" Automation Engineer", "internal tools"])) == (
+        brief_key(old)
+    )
+    assert brief_key(_payload(title_families=["internal tools", "clinical systems"])) != (
+        brief_key(old)
+    )
+
+
+def test_the_migration_turns_each_old_value_into_its_phrase_and_back():
+    assert MIGRATION.PHRASES == OLD_TITLE_PHRASES
+    # The phrases each old value searched for before they could be typed.
+    assert MIGRATION.PHRASES == {
+        "forward_deployed": "forward deployed",
+        "solutions": "solutions engineer",
+        "implementation": "implementation engineer",
+        "internal_tools": "internal tools",
+        "business_systems": "business systems",
+        "automation": "automation engineer",
+        "integration": "integration engineer",
+    }
+    assert MIGRATION.to_phrases(["solutions", "integration"]) == [
+        "solutions engineer",
+        "integration engineer",
+    ]
+    assert MIGRATION.to_values(
+        ["Solutions Engineer", "clinical systems", "solutions engineer"]
+    ) == ["solutions"]
 
 
 def test_the_stack_and_levels_are_part_of_the_brief():

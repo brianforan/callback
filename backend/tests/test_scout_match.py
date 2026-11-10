@@ -118,14 +118,14 @@ def test_levels_come_from_the_title_then_the_years_asked():
     assert parsed_level("Laravel Developer", "Build things.") is None
 
 
-def test_board_queries_come_from_the_stack_or_the_title_families():
+def test_board_queries_come_from_the_stack_or_the_title_phrases():
     payload = {
         "description": "Laravel and PHP work. Laravel first, Vue is fine.",
-        "title_families": ["internal_tools", "automation"],
+        "title_families": ["internal tools", "Clinical Systems"],
     }
     assert board_queries(payload) == ["Laravel", "PHP", "Vue"]
-    families = {**payload, "must_have": []}
-    assert board_queries(families) == ['"internal tools"', '"automation engineer"']
+    phrases = {**payload, "must_have": []}
+    assert board_queries(phrases) == ['"internal tools"', '"Clinical Systems"']
     assert board_queries({"description": "Anything at all", "title_families": []}) == []
 
 

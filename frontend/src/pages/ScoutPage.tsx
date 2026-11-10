@@ -25,7 +25,7 @@ import { PageError, PageLoader } from '../components/PageState';
 import { RunButton, runsLeft, runsLeftText, ScoutRuns } from '../components/ScoutRuns';
 import { formatDateTime, formatUsd } from '../lib/format';
 import { LEVELS, WORK_MODE_OPTIONS } from '../lib/postings';
-import { useFactSheet, useResumes, useSaveScout, useScout } from '../lib/queries';
+import { useFactSheet, useProfiles, useResumes, useSaveScout, useScout } from '../lib/queries';
 import { SECTIONS } from '../lib/sections';
 import type {
   AgencyMode,
@@ -35,7 +35,6 @@ import type {
   Scout,
   ScoutLimitRange,
   ScoutSettingsPayload,
-  TitleFamily,
   WorkMode,
 } from '../lib/types';
 
@@ -43,15 +42,34 @@ const COLOR = SECTIONS.scout.color;
 // Matches the server's limit on a location.
 const LOCATION_MAX_LENGTH = 120;
 
-const TITLE_FAMILIES: { value: TitleFamily; label: string }[] = [
-  { value: 'forward_deployed', label: 'Forward deployed engineer' },
-  { value: 'solutions', label: 'Solutions engineer' },
-  { value: 'implementation', label: 'Implementation engineer' },
-  { value: 'internal_tools', label: 'Internal tools' },
-  { value: 'business_systems', label: 'Business systems' },
-  { value: 'automation', label: 'Automation engineer' },
-  { value: 'integration', label: 'Integration engineer' },
+// Match the server's limits on title phrases.
+const MAX_TITLE_PHRASES = 15;
+const TITLE_PHRASE_MIN_LENGTH = 2;
+const TITLE_PHRASE_MAX_LENGTH = 60;
+// Suggested to profiles that use the built-in software skills: the titles Scout once offered.
+const SOFTWARE_TITLE_PHRASES = [
+  'forward deployed',
+  'solutions engineer',
+  'implementation engineer',
+  'internal tools',
+  'business systems',
+  'automation engineer',
+  'integration engineer',
 ];
+
+/** Typed phrases as the server keeps them: spaces tidied, quotes dropped, too-short and repeated
+ * ones left out. */
+function cleanTitlePhrases(phrases: string[]): string[] {
+  const seen = new Set<string>();
+  return phrases
+    .map((phrase) => phrase.replaceAll('"', ' ').split(/\s+/).filter(Boolean).join(' '))
+    .filter((phrase) => {
+      const key = phrase.toLowerCase();
+      if (phrase.length < TITLE_PHRASE_MIN_LENGTH || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
 
 // Scout's one engine, as the server stores it. Its ranges and past runs are keyed so.
 const ENGINE = 'companies';
@@ -341,6 +359,7 @@ function ReadsCard() {
 
 function ScoutForm({ config }: { config: Scout }) {
   const save = useSaveScout();
+  const profiles = useProfiles();
   const saved = toPayload(config.settings);
   // Null until the first change, so the saved settings show without being copied into state.
   const [edited, setEdited] = useState<ScoutSettingsPayload | null>(null);
@@ -368,6 +387,14 @@ function ScoutForm({ config }: { config: Scout }) {
     (name) =>
       !ruledInText.has(name) && !draft.must_have.includes(name) && !draft.rule_out.includes(name),
   );
+  const activeProfile = profiles.data?.profiles.find(
+    (profile) => profile.id === profiles.data?.active_id,
+  );
+  const picked = new Set(draft.title_families.map((phrase) => phrase.toLowerCase()));
+  const titleSuggestions =
+    activeProfile?.software_skills && draft.title_families.length < MAX_TITLE_PHRASES
+      ? SOFTWARE_TITLE_PHRASES.filter((phrase) => !picked.has(phrase))
+      : [];
   const agencyHint = AGENCY_MODES.find((mode) => mode.value === draft.agency_mode)?.hint;
   const relocationHint = RELOCATIONS.find((option) => option.value === draft.relocation)?.hint;
   const windowOptions = [
@@ -473,34 +500,35 @@ function ScoutForm({ config }: { config: Scout }) {
               </Stack>
 
               <Stack gap={6}>
-                <Text size="sm" fw={500}>
-                  Titles to search under
-                </Text>
-                <Text size="xs" c="dimmed">
-                  This kind of work hides under many titles. With a Must use list, these rank
-                  matching titles first; without one, a title must name one of them (or, with none
-                  picked, be a plain engineering title).
-                </Text>
-                <Chip.Group
-                  multiple
+                <TagsInput
+                  label="Titles to search under"
+                  description="Phrases a job title might use, each matched exactly. Press Enter to add one. With a Must use list, these rank matching titles first; without one, a title must name one of them (or, with none picked, be a plain engineering title)."
+                  placeholder={draft.title_families.length ? '' : 'e.g. solutions engineer'}
                   value={draft.title_families}
-                  onChange={(values) => update({ title_families: values as TitleFamily[] })}
-                >
+                  onChange={(values) => update({ title_families: cleanTitlePhrases(values) })}
+                  maxTags={MAX_TITLE_PHRASES}
+                  maxLength={TITLE_PHRASE_MAX_LENGTH}
+                  clearable
+                  disabled={locked}
+                />
+                {titleSuggestions.length > 0 && !locked && (
                   <Group gap={6}>
-                    {TITLE_FAMILIES.map(({ value, label }) => (
-                      <Chip
-                        key={value}
-                        value={value}
-                        size="sm"
-                        color={COLOR}
+                    <Text size="xs" c="dimmed">
+                      Suggestions:
+                    </Text>
+                    {titleSuggestions.map((phrase) => (
+                      <Button
+                        key={phrase}
+                        size="compact-xs"
                         variant="light"
-                        disabled={locked}
+                        color={COLOR}
+                        onClick={() => update({ title_families: [...draft.title_families, phrase] })}
                       >
-                        {label}
-                      </Chip>
+                        {phrase}
+                      </Button>
                     ))}
                   </Group>
-                </Chip.Group>
+                )}
               </Stack>
 
               <Stack gap={6}>

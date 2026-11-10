@@ -334,7 +334,18 @@ phrases say which titles to look at.
 - **With none picked.** Today Scout falls back to a plain engineering title (`_ENGINEERING_TITLE`
   in `app/scout/engine.py`). That fallback stays for profiles that use the built-in software list,
   so software runs don't change. Other profiles fall back to the title words of their field's role
-  types, and a field with no role types lets every title through to the judge.
+  types, and a field with no role types lets every title through to the judge. Until chunk 4
+  builds role types, every profile keeps today's fallback.
+- **Earlier verdicts still apply.** Scout's judgment memory and its skip list of pages earlier
+  runs turned down are keyed by the brief, and the brief includes the titles (`brief_key` in
+  `app/scout/judgment_memory.py`, `_JUDGED_BY` in `app/scout/leads.py`). Both read the titles
+  through one function that turns each of the seven old phrases back into its old value
+  ("forward deployed" into `forward_deployed`) and leaves any other phrase as typed, lowercased. A
+  brief whose titles didn't change keeps its key, so the migration doesn't make Scout judge every
+  job again; a new phrase makes a new key, as any changed brief does today.
+- **Fenced in prompts.** The phrases are typed by users, so tailor's judge and brief prompts
+  (`tailor/tailor/pipeline.py`, `tailor/tailor/companies.py`) wrap them with `_fence` like the
+  description and Must use list, instead of listing them as plain text.
 
 ## Parser changes
 
@@ -405,8 +416,12 @@ Resumes has a fourth tab, **Skills**, for the active profile:
    `field_titles`, the tailor worker's call, `vocab_checked_at`, the daily limit and Spend.
 7. **Credentials and degrees.** Credential terms as hard filters, and "degree in" any field.
 8. **Scout and tailoring.** The Must use picker, the code gate and tailoring's check read the
-   active profile's vocabulary; Scout's title phrases (editable chips, the migration of
-   `title_families`, and the fallback by field).
+   active profile's vocabulary, and Scout's no-titles fallback for profiles without the software
+   list uses the field's role types.
+9. **Scout's title phrases.** Editable chips, phrases stored per profile, the migration of
+   `title_families`, phrase matching in the title gate, rank and board searches, the brief-key
+   mapping and fencing in tailor's prompts. Needs nothing from chunks 3–8, so it can be built
+   before them; only the fallback by field waits for chunks 4 and 8.
 
 Each chunk is usable on its own, and the README changes with each.
 

@@ -788,7 +788,7 @@ class Work:
     def __init__(self, answer=None, error=None):
         self.answer = answer or {
             "work": "Pharmaceutical brand marketing and pharma sales",
-            "titles": ["brand marketing", "sales representative", "x"],
+            "titles": ["brand manager", "sales representative", "x"],
         }
         self.error = error
         self.calls = []
@@ -839,27 +839,25 @@ def test_the_work_boundary_keeps_a_vague_brief_inside_the_profiles_work(client, 
     with session_factory() as db:
         user, profile = _owner(db)
         row = _settings_row(db, user, profile)
-        _job(db, user, profile, "acme", "Brand Marketing Specialist, Diabetes", text=PHARMA)
+        _job(db, user, profile, "acme", "Brand Manager, Diabetes", text=PHARMA)
         _job(db, user, profile, "globex", "PHP Developer", text=LARAVEL)
         _job(db, user, profile, "initech", "Pharmaceutical Sales Representative", text=PHARMA)
         db.commit()
-        # Not "Brand Manager": the posting parser reads any manager title as people management,
-        # which the default levels leave out.
         payload = _payload(description="anything im desperate", must_have=[])
         judge, work = BriefJudge(), Work()
         result = run_companies(db, user.id, profile.id, payload, _work_stages(judge, work), TODAY)
         assert {page["title"] for page in judge.calls} == {
-            "Brand Marketing Specialist, Diabetes",
+            "Brand Manager, Diabetes",
             "Pharmaceutical Sales Representative",
         }
         assert judge.briefs[0]["work"] == "Pharmaceutical brand marketing and pharma sales"
-        assert judge.briefs[0]["title_families"] == ["brand marketing", "sales representative"]
+        assert judge.briefs[0]["title_families"] == ["brand manager", "sales representative"]
         notes = " ".join(step.detail for step in result.steps)
         assert "Read your work as: Pharmaceutical brand marketing and pharma sales" in notes
         # The read is the run's: two screens and one read.
         assert result.cost_usd == pytest.approx(0.007)
         db.refresh(row)
-        assert row.work_boundary["titles"] == ["brand marketing", "sales representative"]
+        assert row.work_boundary["titles"] == ["brand manager", "sales representative"]
         assert row.work_boundary["edited"] is False
 
         # Read once: the same material doesn't call the model again.
@@ -887,13 +885,13 @@ def test_an_edited_work_line_is_kept_and_a_failed_read_uses_the_last(client, ses
         user, profile = _owner(db)
         boundary = {
             "work": "Brand marketing for medicines",
-            "titles": ["brand marketing"],
+            "titles": ["brand manager"],
             "inputs_key": "from before",
             "made_at": "2026-11-10T00:00:00+00:00",
             "edited": True,
         }
         row = _settings_row(db, user, profile, work_boundary=boundary)
-        _job(db, user, profile, "acme", "Brand Marketing Specialist, Diabetes", text=PHARMA)
+        _job(db, user, profile, "acme", "Brand Manager, Diabetes", text=PHARMA)
         db.commit()
         payload = _payload(description="anything im desperate", must_have=[])
         judge, work = BriefJudge(), Work()

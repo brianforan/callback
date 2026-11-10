@@ -331,11 +331,7 @@ _MIN_SALARY = 20_000
 _MAX_SALARY = 1_000_000
 
 _TITLE_LEVELS: tuple[tuple[PostingLevel, re.Pattern[str]], ...] = (
-    (PostingLevel.INTERN, re.compile(r"\bintern(?:ship)?\b", re.I)),
-    (
-        PostingLevel.MANAGER,
-        re.compile(r"\b(?:manager|head of|director|vp|vice president|cto)\b", re.I),
-    ),
+    # Intern and manager come first, in _parse_level: "manager" alone isn't a level.
     (PostingLevel.PRINCIPAL, re.compile(r"\b(?:principal|distinguished|architect)\b", re.I)),
     (PostingLevel.STAFF, re.compile(r"\b(?:staff|iv|4)\s*$|\bstaff\b", re.I)),
     (PostingLevel.SENIOR, re.compile(r"\b(?:senior|sr|lead)\b|\b(?:iii|3)\s*$", re.I)),
@@ -420,7 +416,16 @@ _RANK_WORDS: tuple[RankWord, ...] = (
     ),
 )
 _INTERN_TITLE = re.compile(r"\bintern(?:ship)?\b", re.I)
-_MANAGER_TITLE = re.compile(r"\b(?:manager|head of|cto)\b", re.I)
+# Titles that run people or a place, which are managers whatever their text says. Most other
+# Manager titles (product, brand, program, account) are individual contributors.
+_PEOPLE_MANAGER_TITLE = re.compile(
+    r"\b(?:engineering|software development|people|general|store|district|branch|plant|shift"
+    r"|restaurant|nurse)\s+manager\b"
+    r"|\bmanager(?:,|\s+of)\s+(?:[\w-]+\s+){0,3}?engineering\b"
+    r"|\bhead of\b|\bcto\b",
+    re.I,
+)
+_MANAGER_WORD = re.compile(r"\bmanager\b", re.I)
 # Text that says the job manages people, which a rank word in the title alone doesn't.
 _MANAGES_PEOPLE = re.compile(
     r"direct reports|people (?:manager|management|leader)|performance reviews"
@@ -760,34 +765,33 @@ def _without_ranks(title: str) -> str:
 
 
 def _manages(title: str, rank: RankWord | None, text: str) -> bool:
-    """A manager word in the title, or a director or VP who either names no individual
-    contributor's job in the title or whose text shows people management."""
-    if _MANAGER_TITLE.search(title):
+    """A title that runs people or a place; a Manager title whose text shows people
+    management; or a director or VP who either names no individual contributor's job in the
+    title or whose text shows people management (docs/skills_spec.md, Levels step 4)."""
+    if _PEOPLE_MANAGER_TITLE.search(title):
+        return True
+    manages_people = _MANAGES_PEOPLE.search(text) is not None
+    if _MANAGER_WORD.search(title) and manages_people:
         return True
     if rank is None or not rank.can_manage:
         return False
     named_job = _CONTRIBUTOR_TITLE.search(_without_ranks(title))
-    return not named_job or _MANAGES_PEOPLE.search(text) is not None
+    return not named_job or manages_people
 
 
 def _parse_level(title: str, years: int | None, text: str) -> PostingLevel | None:
     rank = rank_word(title)
-    if rank is None:
-        level = _first_match(_TITLE_LEVELS, title)
-        if level is not None:
-            return level
-        return None if years is None else _years_level(years)
     if _INTERN_TITLE.search(title):
         return PostingLevel.INTERN
     if _manages(title, rank, text):
         return PostingLevel.MANAGER
     # Plain level words beside the rank words still decide: "Principal Architect" is principal.
-    level = _first_match(_TITLE_LEVELS, _without_ranks(title))
+    level = _first_match(_TITLE_LEVELS, _without_ranks(title) if rank else title)
     if level is not None:
         return level
     if years is not None:
         return _years_level(years)
-    return rank.level
+    return rank.level if rank else None
 
 
 def parse_role_family(title: str, text: str | None = None) -> RoleFamily:

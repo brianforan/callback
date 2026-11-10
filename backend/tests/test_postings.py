@@ -156,13 +156,47 @@ def test_a_director_or_vp_naming_no_contributor_job_stays_a_manager():
     assert parse_posting("Associate Director, Quality", "").level == "manager"
 
 
+def test_a_manager_title_is_a_people_manager_only_when_it_runs_people():
+    brand = parse_posting("Brand Manager, Diabetes", "Own the brand plan with sales and agencies.")
+    assert brand.level is None
+    assert brand.role_family == "other"
+    assert parse_posting("Brand Manager", "5+ years of brand marketing experience").level == (
+        "senior"
+    )
+    assert parse_posting("Associate Brand Manager", "").level == "junior"
+    assert parse_posting("Senior Product Manager", "").level == "senior"
+    assert parse_posting("Territory Account Manager", "3+ years of experience").level == "mid"
+    # Business and leadership development managers are individual contributors.
+    assert parse_posting("Business Development Manager", "").level is None
+    assert parse_posting("Leadership Development Manager", "").level is None
+
+    # Text that shows people management makes any Manager title a manager.
+    product = parse_posting("Product Manager", MANAGES)
+    assert (product.level, product.role_family) == ("manager", "management")
+
+    # Titles that run people or a place are managers whatever the text says.
+    for title in (
+        "Engineering Manager",
+        "Software Development Manager",
+        "Manager, Machine Learning Engineering, Checkout",
+        "Senior Manager of Software Engineering",
+        "Store Manager",
+        "Nurse Manager",
+        "Head of Marketing",
+    ):
+        parsed = parse_posting(title, "Own the roadmap.")
+        assert (parsed.level, parsed.role_family) == ("manager", "management"), title
+    assert parse_posting("Marketing Intern", "").level == "intern"
+
+
 def test_rank_words_take_years_before_the_built_in_ladder():
     assert parse_posting("Vice President, Developer", "3+ years of experience").level == "mid"
     assert parse_posting("Senior Associate Scientist", "3+ years of experience").level == "mid"
     assert parse_posting("Senior Associate Scientist", "").level == "mid"
     assert parse_posting("Associate Scientist", "").level == "junior"
-    # A manager or intern word in the title still decides.
-    assert parse_posting("Associate Product Manager", "3+ years of experience").level == "manager"
+    # A title that runs people, or an intern word, still decides; a product manager doesn't.
+    assert parse_posting("Associate Engineering Manager", "3+ years").level == "manager"
+    assert parse_posting("Associate Product Manager", "3+ years of experience").level == "mid"
     assert parse_posting("Associate Intern", "").level == "intern"
 
 

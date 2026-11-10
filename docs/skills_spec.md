@@ -2,8 +2,8 @@
 
 Status: spec, 2026-11-10, revised the same day for shared field pools, catalog suggestions,
 model suggestions only if needed, and employer rank words, and again for Scout's work boundary
-and Manager titles. Chunks 1, 2, 9 and 10 are built (2026-11-10); the rest isn't. It changes how
-postings are parsed and scored (`app/postings/parser.py`, `app/resumes/matching.py`,
+and Manager titles. Chunks 1, 2, 9, 10 and 11 are built (2026-11-10); the rest isn't. It changes
+how postings are parsed and scored (`app/postings/parser.py`, `app/resumes/matching.py`,
 `app/resumes/structure.py`, `app/vocabulary.py`) and everything that reads their skills.
 
 ## Why
@@ -502,9 +502,9 @@ Resumes has a fourth tab, **Skills**, for the active profile:
     settings, the boundary as the no-titles fallback in the gate, rank and board searches, the
     Their work line and keep rule in the judge, the brief key, failing a run with nothing to go
     on, the Scout page's lines, and dropping `_ENGINEERING_TITLE`.
-11. **Manager titles.** Step 4 of Levels for "manager": the list of titles that run people or a
-    place, the text check for other Manager titles, and the role family following it. Needs
-    nothing from chunks 3–8.
+11. **Manager titles.** Built 2026-11-10. Step 4 of Levels for "manager": the list of titles
+    that run people or a place, the text check for other Manager titles, and the role family
+    following it.
 
 Each chunk is usable on its own, and the README changes with each.
 

@@ -16,7 +16,7 @@ A **callback** is an application that reached screening or beyond at any point. 
 
 Every job you've applied to, as a table or a drag-and-drop board by status, with search, status filters and CSV export. Open one to see its status timeline, the resume you sent, its posting, and the emails, calls, messages and notes you've logged on it.
 
-Every application gets a structured posting: level, role type, years required, salary, tech stack and referral, read from the posting's text by fixed rules with no model calls. Paste a link and Callback fetches the text for you (Greenhouse, Lever and Ashby from their public feeds, other pages as plain text). Any field you correct is never overwritten.
+Every application gets a structured posting: level, role type, years required, salary, tech stack and referral, read from the posting's text by fixed rules with no model calls. A Manager title counts as people management only when the title runs people or a place (Engineering Manager, Store Manager) or the posting says it manages people, so a Brand or Product Manager is read by its seniority words and years. Paste a link and Callback fetches the text for you (Greenhouse, Lever and Ashby from their public feeds, other pages as plain text). Any field you correct is never overwritten.
 
 ### Job listings
 

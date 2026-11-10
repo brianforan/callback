@@ -9,6 +9,7 @@ from app.postings.parser import (
     company_key,
     parse_posting,
     parse_requirements,
+    parse_role_family,
     technology_in_text,
 )
 from app.postings.store import load_match_profile
@@ -130,6 +131,48 @@ def test_level_comes_from_title_then_years():
     assert parse_posting("Software Engineer", "3+ years of experience").level == "mid"
     assert parse_posting("Software Engineer", "8 years of experience").level == "staff"
     assert parse_posting("Senior Full Stack Web & Mobile Engineer", "").role_family == "full_stack"
+
+
+MANAGES = "You'll manage a team of eight engineers and run their performance reviews."
+
+
+def test_rank_words_mean_a_manager_only_when_the_text_says_so():
+    bank = parse_posting("Vice President, Software Engineer", "Build trading systems in Java.")
+    assert bank.level == "senior"
+    assert bank.role_family == "general_software"
+    director = parse_posting("Director of Engineering", MANAGES)
+    assert director.level == "manager"
+    assert director.role_family == "management"
+    assert parse_posting("Senior Vice President, Engineer", "").level == "staff"
+    assert parse_posting("Managing Director", "").level == "principal"
+    assert parse_posting("AVP, Data Engineer", "").level == "mid"
+
+
+def test_rank_words_take_years_before_the_built_in_ladder():
+    assert parse_posting("Vice President, Developer", "3+ years of experience").level == "mid"
+    assert parse_posting("Senior Associate Scientist", "3+ years of experience").level == "mid"
+    assert parse_posting("Senior Associate Scientist", "").level == "mid"
+    assert parse_posting("Associate Scientist", "").level == "junior"
+    # A manager or intern word in the title still decides.
+    assert parse_posting("Associate Product Manager", "3+ years of experience").level == "manager"
+    assert parse_posting("Associate Intern", "").level == "intern"
+
+
+def test_staff_and_architect_keep_their_software_meaning():
+    assert parse_posting("Staff Accountant", "").level == "junior"
+    assert parse_posting("Staff Accountant", "6 years of experience").level == "senior"
+    assert parse_posting("Staff Data Engineer", "").level == "staff"
+    assert parse_posting("Staff Engineering Manager", "").level == "manager"
+    assert parse_posting("Solutions Architect", "").level == "principal"
+    assert parse_posting("Landscape Architect", "").level is None
+    assert parse_posting("Principal Laravel Architect", "").level == "principal"
+    assert parse_posting("Associate Director, Quality", "").level == "staff"
+    assert parse_posting("Vice President, Software Engineer III", "").level == "senior"
+
+
+def test_role_family_without_text_reads_the_title_alone():
+    assert parse_role_family("Director of Engineering") == "management"
+    assert parse_role_family("Director of Engineering", "Design APIs.") == "general_software"
 
 
 def test_normalizers():

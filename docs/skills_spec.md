@@ -286,20 +286,24 @@ A posting's level is the first of these that applies:
    software, SRE, data, cloud, platform, solutions, systems, security, ML): staff or principal, as
    today.
 3. A title with no rank word: today's title rules, then years asked, as today.
-4. A rank word other than associate, staff and architect, when the text shows people management
+4. "Intern" in the title: intern. A manager word in the title ("manager", "head of", "CTO"), or
+   a rank word other than associate, staff and architect when the text shows people management
    ("direct reports", "manage a team", "lead a team of", "people manager", "hire and develop"):
    manager.
-5. Years asked, when the posting names them: under 2 junior, under 5 mid, under 8 senior, else
+5. A plain level word beside the rank word (principal, senior, junior, the numbered ladders):
+   that level. "Principal Architect" is principal, "Vice President, Software Engineer III"
+   senior.
+6. Years asked, when the posting names them: under 2 junior, under 5 mid, under 8 senior, else
    staff, as `_parse_level` does today when a title names no level. "Senior Associate Scientist,
-   3+ years" is mid.
-6. The company's ladder: `company_ladders` for the posting's company key and that word.
-7. The built-in individual-contributor ladder: associate junior, AVP mid, VP senior, SVP, director
-   and executive director staff, managing director principal, staff (outside software) junior,
-   architect (outside software) no level.
+   3+ years" is mid ("senior associate" is one rank word, so "senior" isn't a plain word here).
+7. The company's ladder: `company_ladders` for the posting's company key and that word.
+8. The built-in individual-contributor ladder: associate junior, senior associate mid, AVP mid,
+   VP senior, SVP, director and executive director staff, managing director principal, staff
+   (outside software) junior, architect (outside software) no level.
 
 **Company ladders.** Once a day the catalog worker reads the shared catalog. For each company and
 rank word, it takes the jobs with that word in the title whose text asks for years, turns each
-into a level by the bands in step 5, and stores the most common one when there are at least 2 such
+into a level by the bands in step 6, and stores the most common one when there are at least 2 such
 jobs. Only the catalog is read, not anyone's postings.
 
 Levels never call a model: step 4's text check settles the case a model would have been asked

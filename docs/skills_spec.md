@@ -253,8 +253,9 @@ cost shows in Spend like other calls.
 Each field has an ordered list of role types, each a name and the title words that mark it. A
 title gets the first role type with a word in it, matched as whole words, case-insensitively. Order
 matters, as it does today: Management comes before Full stack so "Engineering Manager, Full Stack"
-is management. A rank word (see Levels) marks a role type only when the posting's text shows
-people management, so "Vice President, Software Engineer" isn't Management.
+is management. A director or VP who names an individual contributor's job marks a management
+role type only when the posting's text shows people management (Levels, step 4), so "Vice
+President, Software Engineer" isn't Management.
 
 Anyone with a profile in the field can add, edit, delete and reorder its role types on the Skills
 tab, and accept the model's role type suggestions.
@@ -274,22 +275,27 @@ Title synonyms apply only when the profile uses the software list.
 ## Levels
 
 The level words are built in and the same for every field. Most mean the same thing everywhere
-(intern, junior, senior, principal, manager, head of, the numbered ladders I to IV). **Rank words**
-don't, because employers use them for different rungs: associate, assistant vice president (AVP),
-vice president (VP), senior vice president (SVP), director, executive director, managing director,
-staff and architect.
+(intern, junior, senior, principal, manager, head of, staff, architect, the numbered ladders I to
+IV). **Rank words** don't, because employers use them for different rungs: associate, senior
+associate, assistant vice president (AVP), vice president (VP), senior vice president (SVP),
+director, executive director and managing director. "Staff" and "architect" are rank words only in
+a few known uses, since at most employers they're the staff and principal rungs for any job (Staff
+Product Designer, Staff Scientist): Staff Accountant and staff auditor, nurse, attorney,
+pharmacist, photographer, writer and assistant; Member of Technical Staff; and landscape,
+interior, building and licensed architects.
 
 A posting's level is the first of these that applies:
 
 1. A correction on the posting.
-2. "Staff" or "architect" in a title that also has a software role word (engineer, developer,
-   software, SRE, data, cloud, platform, solutions, systems, security, ML): staff or principal, as
-   today.
-3. A title with no rank word: today's title rules, then years asked, as today.
-4. "Intern" in the title: intern. A manager word in the title ("manager", "head of", "CTO"), or
-   a rank word other than associate, staff and architect when the text shows people management
-   ("direct reports", "manage a team", "lead a team of", "people manager", "hire and develop"):
-   manager.
+2. A title with no rank word: today's title rules, then years asked, as today.
+3. "Intern" in the title: intern.
+4. Manager, when the title has a manager word ("manager", "head of", "CTO"), or has a director or
+   VP rank word and either names no individual contributor's job (engineer, developer, analyst,
+   scientist, programmer, specialist, consultant, designer, administrator, accountant, architect,
+   associate, technologist, researcher) or has text showing people management ("direct reports",
+   "manage a team", "lead a team of", "people manager", "hire and develop", "performance
+   reviews", "build a team"). "Director, Embedded Systems" is a manager, as before; "Vice
+   President, Software Engineer" isn't unless its text says it manages people.
 5. A plain level word beside the rank word (principal, senior, junior, the numbered ladders):
    that level. "Principal Architect" is principal, "Vice President, Software Engineer III"
    senior.
@@ -298,8 +304,11 @@ A posting's level is the first of these that applies:
    3+ years" is mid ("senior associate" is one rank word, so "senior" isn't a plain word here).
 7. The company's ladder: `company_ladders` for the posting's company key and that word.
 8. The built-in individual-contributor ladder: associate junior, senior associate mid, AVP mid,
-   VP senior, SVP, director and executive director staff, managing director principal, staff
-   (outside software) junior, architect (outside software) no level.
+   VP senior, SVP, director and executive director staff, managing director principal, the staff
+   uses junior, Member of Technical Staff and the architect uses no level.
+
+The role family follows step 4: a director or VP is Management exactly when step 4 makes it a
+manager. Company hiring history, which has only titles, keeps today's title-only reading.
 
 **Company ladders.** Once a day the catalog worker reads the shared catalog. For each company and
 rank word, it takes the jobs with that word in the title whose text asks for years, turns each

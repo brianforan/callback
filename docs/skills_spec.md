@@ -1,9 +1,9 @@
 # Skills, role types and levels for any field
 
 Status: spec, 2026-11-10, revised the same day for shared field pools, catalog suggestions,
-model suggestions only if needed, and employer rank words. Chunks 1, 2 and 9 are built
-(2026-11-10); the rest isn't. It changes how postings are parsed and scored
-(`app/postings/parser.py`, `app/resumes/matching.py`, `app/resumes/structure.py`,
+model suggestions only if needed, and employer rank words, and again for Scout's work boundary.
+Chunks 1, 2 and 9 are built (2026-11-10); the rest isn't. It changes how postings are parsed
+and scored (`app/postings/parser.py`, `app/resumes/matching.py`, `app/resumes/structure.py`,
 `app/vocabulary.py`) and everything that reads their skills.
 
 ## Why
@@ -26,7 +26,9 @@ type. Its word lists only fit software:
 - **Degree field.** A degree line with no level counts as a bachelor's only when it names
   computer science, engineering or STEM.
 - **Scout's titles.** "Titles to search under" offers seven fixed software phrases, and with
-  none picked Scout only lets plain engineering titles through.
+  none picked Scout only lets plain engineering titles through. Its judge never sees the
+  baselines, so with a vague brief ("anything, I'm desperate") and no fact sheet it keeps
+  whatever the title check let in. A pharma marketing baseline got 25 software leads.
 - **Cold start.** Even with suggestions from code, a new field needs a few postings before a
   phrase repeats often enough to be suggested, and every user in that field starts from nothing.
 
@@ -331,11 +333,9 @@ phrases say which titles to look at.
 - **Matching.** Each phrase is matched as an exact phrase, as the seven are today
   (`"forward deployed"`), wherever Scout uses title families: the title gate, the +2 rank for a
   phrase in the title, and the board searches when there's no Must use list.
-- **With none picked.** Today Scout falls back to a plain engineering title (`_ENGINEERING_TITLE`
-  in `app/scout/engine.py`). That fallback stays for profiles that use the built-in software list,
-  so software runs don't change. Other profiles fall back to the title words of their field's role
-  types, and a field with no role types lets every title through to the judge. Until chunk 4
-  builds role types, every profile keeps today's fallback.
+- **With none picked.** Built in chunk 9 as today's plain engineering title (`_ENGINEERING_TITLE`
+  in `app/scout/engine.py`) for every profile. Chunk 10 replaces it with the titles of the
+  profile's work boundary (see Scout's work boundary), and the engineering fallback goes.
 - **Earlier verdicts still apply.** Scout's judgment memory and its skip list of pages earlier
   runs turned down are keyed by the brief, and the brief includes the titles (`brief_key` in
   `app/scout/judgment_memory.py`, `_JUDGED_BY` in `app/scout/leads.py`). Both read the titles
@@ -346,6 +346,59 @@ phrases say which titles to look at.
 - **Fenced in prompts.** The phrases are typed by users, so tailor's judge and brief prompts
   (`tailor/tailor/pipeline.py`, `tailor/tailor/companies.py`) wrap them with `_fence` like the
   description and Must use list, instead of listing them as plain text.
+
+## Scout's work boundary
+
+A run with no Must use list and no title phrases still has to know what work to look for. Today
+it falls back to engineering titles for every profile, and the judge, which sees the brief and
+fact sheet but not the baselines, keeps anything a vague brief allows. Instead, one Haiku call
+reads the profile's own material and sets the boundary of the work, and Scout never falls back to
+titles unrelated to the profile.
+
+- **What it is.** A **work line**, one sentence of at most 200 characters ("Pharmaceutical brand
+  marketing, commercial analytics and pharma sales, in cardiometabolic and respiratory
+  medicines"), and up to 10 **boundary titles**. The titles are the roles the person has held,
+  without level or specialty words ("sales representative", not "senior specialty sales
+  representative"), plus the natural next steps and close neighbours ("brand manager", "product
+  manager", "marketing manager"). Each title follows the title phrase rules (2–60 characters,
+  unique ignoring case); code drops any that don't.
+- **What it reads.** The profile's baselines as text, its fact sheet and the brief's description,
+  each fenced. When the description names different work from the baselines ("moving into UX
+  research"), the description wins.
+- **When it's made.** By the Scout worker at the start of a run, before the scan, when the profile
+  has none or its inputs changed since it was made (a hash of the baselines' text, the fact sheet
+  and the description). It's tailor's pipeline Haiku model, metered like any stage: its cost is
+  the run's, and the run's report shows it as a step ("Read your work as: …"). If the call fails,
+  the run uses the last boundary with a note; with none, the run fails without counting toward
+  the day's runs.
+- **Stored** on `smartsearch_settings.work_boundary` (JSON: work, titles, inputs key, made at,
+  edited), so it's per profile like the rest of Scout's settings.
+- **The title check.** With no Must use list and no title phrases picked, the boundary titles act
+  as the picked phrases: the title gate, the +4 rank for one in the title, the SQL prefilter and
+  the board searches. With phrases picked or a Must use list, the boundary titles do nothing
+  there. `_ENGINEERING_TITLE`, `_ENGINEERING_WORDS` and the +1 rank for an engineering title go.
+- **The judge.** The brief gains `Their work: <work line>`, fenced like the description, for every
+  run. The keep rule adds: when the brief's description doesn't name the work, the job's work
+  must be the work line's kind of work or a natural next step from it. Verify reads the same
+  brief.
+- **The brief key** includes the work line and, when they're used, the boundary titles (through
+  `title_keys`). So a changed boundary judges jobs afresh. Adding it changes every existing brief's
+  key once, so the next run of each profile judges its remembered jobs again, about the cost of
+  one ordinary run.
+- **Nothing to go on.** Starting a run is refused, before anything is spent, when the profile has
+  no baselines and a blank fact sheet, and the brief has a blank description, no Must use list and
+  no title phrases. The message says what to add: a baseline, a title to search under or a Must
+  use list. A boundary call that finds no work (no titles) fails the run the same way, without
+  counting it.
+- **Used at once, shown and editable.** The boundary is used as soon as it's made; nothing waits
+  for the person to accept it, since a run with too little to go on is exactly when it's needed.
+  The Scout page shows it under the description: "Scout reads your work as: …" with **Edit**, and,
+  when no titles are picked, "Searching under titles from your baselines: …" with **Use and
+  edit**, which copies them into Titles to search under. An edited work line is kept as edited and
+  not remade; when the inputs changed since, the page says so with **Read again**, which clears
+  the edit so the next run remakes it.
+- **Every profile.** Software profiles get a boundary too. Their runs with a Must use list keep
+  today's title check; only the judge line is new.
 
 ## Parser changes
 
@@ -416,12 +469,14 @@ Resumes has a fourth tab, **Skills**, for the active profile:
    `field_titles`, the tailor worker's call, `vocab_checked_at`, the daily limit and Spend.
 7. **Credentials and degrees.** Credential terms as hard filters, and "degree in" any field.
 8. **Scout and tailoring.** The Must use picker, the code gate and tailoring's check read the
-   active profile's vocabulary, and Scout's no-titles fallback for profiles without the software
-   list uses the field's role types.
+   active profile's vocabulary.
 9. **Scout's title phrases.** Built 2026-11-10. Editable chips, phrases stored per profile, the
    migration of `title_families`, phrase matching in the title gate, rank and board searches, the
-   brief-key mapping and fencing in tailor's prompts. Needs nothing from chunks 3–8, so it can be built
-   before them; only the fallback by field waits for chunks 4 and 8.
+   brief-key mapping and fencing in tailor's prompts.
+10. **Scout's work boundary.** The tailor call, `work_boundary` on Scout's settings, the boundary
+    as the no-titles fallback in the gate, rank and board searches, the Their work line and keep
+    rule in the judge, the brief key, refusing a run with nothing to go on, the Scout page's
+    lines, and dropping `_ENGINEERING_TITLE`. Needs nothing from chunks 3–8.
 
 Each chunk is usable on its own, and the README changes with each.
 
@@ -444,5 +499,9 @@ Each chunk is usable on its own, and the README changes with each.
 - Weights per field or profile.
 - Suggesting title phrases from the catalog (phrases that recur across companies' titles among
   jobs the user saved or applied to).
+- A **Read my baselines** button that remakes the work boundary before a run. The API never calls
+  tailor directly, so it would need a queued job like briefs; until then a run remakes it.
+- Scout's fallback by field: the title words of a field's role types when a profile has no
+  titles. The work boundary replaces it.
 - A warning when a title phrase is so broad ("engineer", "analyst") that it matches most of the
   catalog. Without a Must use list such a phrase lets nearly everything through to the judge.

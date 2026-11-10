@@ -126,7 +126,7 @@ A job is left out, in this order, with each reason counted in the run's notes:
 | agency | At a company the catalog knows as an agency, when agency listings are skipped. |
 | stack | `must_have` set and none of them (or their implied names) in the title or in the text outside a nice-to-have section. A technology named only under "Nice to have", "Bonus" or "Preferred", or in a line saying it's a plus, doesn't count. |
 | rule_out | A `rule_out` technology in the title or in a required line. |
-| title | No `must_have`: as today, a title family or (with none picked) a plain engineering title. |
+| title | No `must_have`: a title phrase, or with none picked, a title of the profile's work boundary (docs/skills_spec.md, Scout's work boundary). |
 | level | The job's level is more than one rung from every wanted level, or is intern or manager and not wanted. |
 | old, mode, abroad, far | Unchanged. |
 | not open to the US | A US location, and the catalog's stored fact says the posting can't hire in the US. |

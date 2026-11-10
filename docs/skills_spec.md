@@ -1,10 +1,10 @@
 # Skills, role types and levels for any field
 
 Status: spec, 2026-11-10, revised the same day for shared field pools, catalog suggestions,
-model suggestions only if needed, and employer rank words, and again for Scout's work boundary.
-Chunks 1, 2, 9 and 10 are built (2026-11-10); the rest isn't. It changes how postings are parsed
-and scored (`app/postings/parser.py`, `app/resumes/matching.py`, `app/resumes/structure.py`,
-`app/vocabulary.py`) and everything that reads their skills.
+model suggestions only if needed, and employer rank words, and again for Scout's work boundary
+and Manager titles. Chunks 1, 2, 9 and 10 are built (2026-11-10); the rest isn't. It changes how
+postings are parsed and scored (`app/postings/parser.py`, `app/resumes/matching.py`,
+`app/resumes/structure.py`, `app/vocabulary.py`) and everything that reads their skills.
 
 ## Why
 
@@ -22,7 +22,10 @@ type. Its word lists only fit software:
   individual contributors titles like Associate, Vice President, Senior Vice President, Director
   and Executive Director, so "Vice President, Software Engineer" is read today as a manager-level
   job with the Management role type (`_TITLE_LEVELS`, `_ROLE_FAMILIES`). That one already hurts
-  software searches.
+  software searches. Any title with "Manager" is read as a people manager too, though most aren't:
+  of 2,794 open catalog jobs with "Manager" in the title, 711 show people management. Scout's
+  default levels leave managers out, so Brand, Product, Program and Account Manager jobs never
+  reach its judge, and a marketer's main titles are lost.
 - **Degree field.** A degree line with no level counts as a bachelor's only when it names
   computer science, engineering or STEM.
 - **Scout's titles.** "Titles to search under" offers seven fixed software phrases, and with
@@ -280,8 +283,10 @@ Title synonyms apply only when the profile uses the software list.
 ## Levels
 
 The level words are built in and the same for every field. Most mean the same thing everywhere
-(intern, junior, senior, principal, manager, head of, staff, architect, the numbered ladders I to
-IV). **Rank words** don't, because employers use them for different rungs: associate, senior
+(intern, junior, senior, principal, head of, staff, architect, the numbered ladders I to IV).
+"Manager" doesn't: most Manager titles (product, brand, program, project, account, marketing,
+customer success) are individual contributors, so it means a people manager only as step 4
+says. **Rank words** don't, because employers use them for different rungs: associate, senior
 associate, assistant vice president (AVP), vice president (VP), senior vice president (SVP),
 director, executive director and managing director. "Staff" and "architect" are rank words only in
 a few known uses, since at most employers they're the staff and principal rungs for any job (Staff
@@ -292,15 +297,29 @@ interior, building and licensed architects.
 A posting's level is the first of these that applies:
 
 1. A correction on the posting.
-2. A title with no rank word: today's title rules, then years asked, as today.
+2. A title with no rank word and no "manager": today's title rules, then years asked, as today.
+   One with "manager" goes on to step 4, then the plain level words and years of steps 5 and 6.
 3. "Intern" in the title: intern.
-4. Manager, when the title has a manager word ("manager", "head of", "CTO"), or has a director or
-   VP rank word and either names no individual contributor's job (engineer, developer, analyst,
-   scientist, programmer, specialist, consultant, designer, administrator, accountant, architect,
-   associate, technologist, researcher) or has text showing people management ("direct reports",
-   "manage a team", "lead a team of", "people manager", "hire and develop", "performance
-   reviews", "build a team"). "Director, Embedded Systems" is a manager, as before; "Vice
-   President, Software Engineer" isn't unless its text says it manages people.
+4. Manager, when any of these holds:
+   - the title names running people or a place: engineering manager, software development
+     manager, "manager of" or "manager," followed by an engineering field ("Manager, Machine
+     Learning Engineering"), people manager, general, store, district, branch, plant, shift,
+     restaurant or nurse manager, head of, CTO;
+   - the title has "manager" and the text shows people management ("direct reports", "manage a
+     team", "lead a team of", "people manager", "hire and develop", "performance reviews", "build
+     a team");
+   - the title has a director or VP rank word and either names no individual contributor's job
+     (engineer, developer, analyst, scientist, programmer, specialist, consultant, designer,
+     administrator, accountant, architect, associate, technologist, researcher) or has text
+     showing people management.
+
+   "Director, Embedded Systems" and "Engineering Manager" are managers, as before; "Vice
+   President, Software Engineer", "Brand Manager" and "Senior Product Manager" aren't unless
+   their text says they manage people. A Manager title that isn't a manager takes its level from
+   the steps below, as a title without "manager" would: "Senior Product Manager" senior,
+   "Associate Brand Manager" junior, "Brand Manager, 5+ years" senior, and with neither, no level,
+   so Scout's judge decides. "Business development manager" and "leadership development manager"
+   aren't on the list: they're individual contributors.
 5. A plain level word beside the rank word (principal, senior, junior, the numbered ladders):
    that level. "Principal Architect" is principal, "Vice President, Software Engineer III"
    senior.
@@ -311,8 +330,15 @@ A posting's level is the first of these that applies:
    VP senior, SVP, director and executive director staff, managing director principal, the staff
    uses junior, Member of Technical Staff and the architect uses no level.
 
-The role family follows step 4: a director or VP is Management exactly when step 4 makes it a
-manager. Company hiring history, which has only titles, keeps today's title-only reading.
+The role family follows step 4: a title is Management exactly when step 4 makes it a manager, so
+a Product or Brand Manager takes the next role family its title matches, or other. Company hiring
+history, which has only titles, keeps today's title-only reading.
+
+Measured on the local catalog's 2,794 open jobs with "Manager" in the title: 433 stay managers by
+title and 476 by text; 628 become senior, 108 staff, 37 principal and 44 junior or mid from title
+words; 638 take a level from years asked; 419 have no level. Saved postings keep the level they
+were parsed with until they're read again (`make postings`), as after chunk 2; catalog jobs are
+read when Scout scans them.
 
 Levels never call a model and use no stored data. Measured on the local catalog (18,853 jobs),
 only 137 reach step 7, mostly Associate titles that name no years, so a ladder learned per company
@@ -476,6 +502,9 @@ Resumes has a fourth tab, **Skills**, for the active profile:
     settings, the boundary as the no-titles fallback in the gate, rank and board searches, the
     Their work line and keep rule in the judge, the brief key, failing a run with nothing to go
     on, the Scout page's lines, and dropping `_ENGINEERING_TITLE`.
+11. **Manager titles.** Step 4 of Levels for "manager": the list of titles that run people or a
+    place, the text check for other Manager titles, and the role family following it. Needs
+    nothing from chunks 3–8.
 
 Each chunk is usable on its own, and the README changes with each.
 
@@ -493,8 +522,6 @@ Each chunk is usable on its own, and the README changes with each.
   for years. Measured at 47 of 18,853 catalog jobs it would change, so left out; worth another
   look if catalog postings without years grow.
 - Company industry as a level signal (research's `industry` covers only researched companies).
-- "Product Manager" and "Account Manager" are still read as manager level. "Manager" isn't a rank
-  word.
 - Weights per field or profile.
 - Suggesting title phrases from the catalog (phrases that recur across companies' titles among
   jobs the user saved or applied to).

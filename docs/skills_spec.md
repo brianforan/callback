@@ -25,6 +25,8 @@ type. Its word lists only fit software:
   software searches.
 - **Degree field.** A degree line with no level counts as a bachelor's only when it names
   computer science, engineering or STEM.
+- **Scout's titles.** "Titles to search under" offers seven fixed software phrases, and with
+  none picked Scout only lets plain engineering titles through.
 - **Cold start.** Even with suggestions from code, a new field needs a few postings before a
   phrase repeats often enough to be suggested, and every user in that field starts from nothing.
 
@@ -131,6 +133,11 @@ exactly one.
   profile's vocabulary didn't place, set when a new or edited posting is parsed (chunk 5).
 - `vocab_checked_at` timestamptz nullable and `vocab_check_attempts` int default 0, for the model
   check below (chunk 6 only).
+
+`smartsearch_settings.title_families` keeps its name and JSON type but holds the profile's
+phrases instead of `TitleFamily` values. The migration turns each stored value into its phrase
+("forward_deployed" into "forward deployed", "solutions" into "solutions engineer", and so on, as
+`_TITLE_FAMILY_QUERIES` writes them), and the `TitleFamily` enum goes.
 
 `resumes.variant_rules` stores role type names instead of `RoleFamily` values. The migration maps
 each value to its label.
@@ -309,6 +316,26 @@ Levels never call a model and use no stored data. Measured on the local catalog 
 only 137 reach step 7, mostly Associate titles that name no years, so a ladder learned per company
 was left out.
 
+## Scout's title phrases
+
+Scout's "Titles to search under" are today seven fixed software phrases (`TitleFamily` in
+`app/scout/limits.py`, their searches in `_TITLE_FAMILY_QUERIES`). They become the profile's own
+phrases. What someone searches for is personal, so the phrases stay on the profile and never join
+the field's pool, and they aren't role types: role types say what kind of job a title is, title
+phrases say which titles to look at.
+
+- **Editing.** The chips become editable: type a phrase to add it, × to remove one. Up to 15
+  phrases a profile, each 2 to 60 characters, unique ignoring case. A profile that uses the
+  built-in software list shows today's seven as suggestions to click on; other profiles start
+  empty.
+- **Matching.** Each phrase is matched as an exact phrase, as the seven are today
+  (`"forward deployed"`), wherever Scout uses title families: the title gate, the +2 rank for a
+  phrase in the title, and the board searches when there's no Must use list.
+- **With none picked.** Today Scout falls back to a plain engineering title (`_ENGINEERING_TITLE`
+  in `app/scout/engine.py`). That fallback stays for profiles that use the built-in software list,
+  so software runs don't change. Other profiles fall back to the title words of their field's role
+  types, and a field with no role types lets every title through to the judge.
+
 ## Parser changes
 
 - `parse_posting` and `parse_requirements` take the user's vocabulary (built in chunk 1).
@@ -378,7 +405,8 @@ Resumes has a fourth tab, **Skills**, for the active profile:
    `field_titles`, the tailor worker's call, `vocab_checked_at`, the daily limit and Spend.
 7. **Credentials and degrees.** Credential terms as hard filters, and "degree in" any field.
 8. **Scout and tailoring.** The Must use picker, the code gate and tailoring's check read the
-   active profile's vocabulary.
+   active profile's vocabulary; Scout's title phrases (editable chips, the migration of
+   `title_families`, and the fallback by field).
 
 Each chunk is usable on its own, and the README changes with each.
 
@@ -399,3 +427,7 @@ Each chunk is usable on its own, and the README changes with each.
 - "Product Manager" and "Account Manager" are still read as manager level. "Manager" isn't a rank
   word.
 - Weights per field or profile.
+- Suggesting title phrases from the catalog (phrases that recur across companies' titles among
+  jobs the user saved or applied to).
+- A warning when a title phrase is so broad ("engineer", "analyst") that it matches most of the
+  catalog. Without a Must use list such a phrase lets nearly everything through to the judge.

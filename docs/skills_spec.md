@@ -1,9 +1,10 @@
 # Skills, role types and levels for any field
 
-Status: spec, 2026-11-10, revised the same day for shared field pools, model suggestions and
-employer title ladders. Chunk 1 is built (2026-11-10); the rest isn't. It changes how postings are
-parsed and scored (`app/postings/parser.py`, `app/resumes/matching.py`, `app/resumes/structure.py`,
-`app/vocabulary.py`) and everything that reads their skills.
+Status: spec, 2026-11-10, revised the same day for shared field pools, catalog suggestions,
+model suggestions only if needed, and employer title ladders. Chunk 1 is built (2026-11-10); the
+rest isn't. It changes how postings are parsed and scored (`app/postings/parser.py`,
+`app/resumes/matching.py`, `app/resumes/structure.py`, `app/vocabulary.py`) and everything that
+reads their skills.
 
 ## Why
 
@@ -31,9 +32,9 @@ type. Its word lists only fit software:
 
 1. Match scores, missing skills, Insights, tailoring checks, rejection reports and Scout work for
    any field.
-2. **Data first, model second.** Code matches what's already known. A model call sees only the
-   phrases and titles code can't place, and its answers are stored, so the same phrase never goes
-   to a model twice in one field. Calls fall off as a field's vocabulary fills.
+2. **Data first, model second.** A field's pool is seeded from the shared catalog's postings by
+   code. A model call, if chunk 6 is ever built, sees only the phrases and titles code can't
+   place, and its answers are stored, so the same phrase never goes to a model twice in one field.
 3. **Nothing a model says affects a score until a person accepts it.**
 4. Software profiles work as they do today, with no setup.
 5. A new profile gets useful scores within minutes, and at once when someone in its field came
@@ -68,7 +69,8 @@ exactly one.
   engineering with the software list on, as today.
 - **Changing one.** The Skills tab can move a profile to another field. Its turned-down names are
   dropped, since they were against the old pool.
-- **Admin → Fields** lists fields with how many profiles each has. The admin can rename a field,
+- **Admin → Fields** lists fields with how many profiles each has and, from chunk 5, the average
+  leftover phrases per posting over the last 30 days. The admin can rename a field,
   merge two (profiles, terms and role types move; terms with the same name merge their aliases), and
   remove a term or role type from a pool. No one else can remove a pool term; they turn it down for
   their own profile.
@@ -111,6 +113,10 @@ exactly one.
 - Unique on (`field_id`, `title_key`). `role_type` with no `new_word` means an existing role type
   fits; with one, it's a new role type marked by that word; both empty means none fits.
 
+`field_catalog_phrases` (new): candidate phrases from catalog jobs in a field, rebuilt daily.
+- `field_id` (cascade), `phrase` varchar(120), `companies` int, `updated_at`. Primary key
+  (`field_id`, lower(`phrase`)). Only phrases used by 3 or more companies are kept.
+
 `company_ladders` (new): what a company's rank words mean, learned from the shared catalog.
 - `company_key` varchar(200), `word` varchar(40), `level` varchar(20) (a `PostingLevel` value),
   `jobs` int, `updated_at`. Primary key (`company_key`, `word`).
@@ -125,8 +131,10 @@ exactly one.
 - `role_family` is replaced by `role_type` varchar(40), nullable, holding only a user's
   correction. The migration copies `role_family` into `role_type`, as its label ("Backend"), only
   where `role_family` is in `corrected_fields`, then drops the column. The `RoleFamily` enum goes.
+- `leftover_phrases` int nullable: how many candidate phrases the posting had that the
+  profile's vocabulary didn't place, set when a new or edited posting is parsed (chunk 5).
 - `vocab_checked_at` timestamptz nullable and `vocab_check_attempts` int default 0, for the model
-  check below.
+  check below (chunk 6 only).
 
 `resumes.variant_rules` stores role type names instead of `RoleFamily` values. The migration maps
 each value to its label.
@@ -162,15 +170,23 @@ All of these show on the Skills tab.
 
 1. **The field's pool.** Active for the profile without a click.
 2. **Added by hand** on the Skills tab. It joins the field's pool.
-3. **Suggested from the profile's postings.** Code reads the requirement and nice-to-have lines of
-   the user's postings made under profiles in this field (the same section labelling the parser
-   uses today) and collects candidates:
-   - runs of one to four capitalised words, and all-caps tokens of two or more letters ("Accounts
-     Payable", "GAAP", "NetSuite"), leaving out a fixed list of common English and job-ad words
-     ("Strong", "Experience", "Ability", "Team");
-   - a candidate counts once per posting. It's suggested once it appears in 3 postings, or 2 when
-     the user has fewer than 10 in the field, and isn't already in the profile's vocabulary or
-     turned down. The 30 most common show, each with how many postings named it.
+3. **Suggested from postings.** Code reads requirement and nice-to-have lines (the same section
+   labelling the parser uses today) and collects candidates: runs of one to four capitalised
+   words, and all-caps tokens of two or more letters ("Accounts Payable", "GAAP", "NetSuite"),
+   leaving out a fixed list of common English and job-ad words ("Strong", "Experience",
+   "Ability", "Team"). It reads two sets of postings:
+   - **The shared catalog.** Open catalog jobs whose title has a title word of one of the field's
+     role types. A candidate counts once per company and is suggested once 3 companies use it.
+     Counting companies rather than jobs keeps out company names, product names and one
+     employer's boilerplate, which only a large set of postings can do. Worked out once a day by
+     the catalog worker and stored per field (`field_catalog_phrases`: `field_id`, `phrase`,
+     `companies`, `updated_at`), since it reads thousands of jobs.
+   - **The user's own postings** made under profiles in this field. A candidate counts once per
+     posting and is suggested once it appears in 3, or 2 when the user has fewer than 10 in the
+     field.
+
+   Neither suggests anything already in the profile's vocabulary or turned down. The 30 most common
+   show, each with how many companies or postings named it.
 4. **Suggested from the profile's resumes**: the items on lines in a Skills-type section ("Skills",
    "Technical skills", "Tools", "Certifications") split on commas, semicolons and pipes, after the
    "Label:" part.
@@ -188,6 +204,13 @@ no one learns what anyone else applied to. Other people in the field see a term 
 someone accepted it into the pool.
 
 ## Model suggestions
+
+**Built only if needed.** Code suggestions from the catalog may leave little for a model to do.
+From chunk 5, the worker stores each new or edited posting's leftover count (below) in
+`job_postings.leftover_phrases`, and Admin → Fields shows each field's average over the last 30
+days. Chunk 6 is built only if, after a few weeks of real use, fields outside Software engineering
+still average enough leftovers to matter. That threshold is the admin's call, made with the
+number in front of them. Until then nothing in this spec calls a model.
 
 **When.** After the worker parses a new or edited posting, it collects the posting's leftovers:
 
@@ -340,11 +363,14 @@ Resumes has a fourth tab, **Skills**, for the active profile:
 3. **Fields.** `fields`, `field_terms`, `profiles.field_id`, `profile_terms` as turned-down names,
    the migration, version bumps across a field, the Field line and shared Edit on the Skills tab,
    and Admin → Fields.
-4. **Code suggestions.** From postings, resumes and the fact sheet, with Add, Ignore and Add all.
-5. **Role types.** `field_role_types`, the `role_type` correction, baseline rules and Job listings
-   filters by name, the migration from `RoleFamily`, and the Role types section.
-6. **Model suggestions.** Leftovers, `field_phrases`, `field_titles`, the tailor worker's call,
-   `vocab_checked_at`, the daily limit and Spend.
+4. **Role types.** `field_role_types`, the `role_type` correction, baseline rules and Job listings
+   filters by name, the migration from `RoleFamily`, and the Role types section. Comes before
+   suggestions, because catalog suggestions pick a field's jobs by its role types' title words.
+5. **Code suggestions.** From the catalog (`field_catalog_phrases`), the user's postings, resumes
+   and the fact sheet, with Add, Ignore and Add all; `leftover_phrases` and its average on
+   Admin → Fields.
+6. **Model suggestions, only if needed** (see Model suggestions). Leftovers, `field_phrases`,
+   `field_titles`, the tailor worker's call, `vocab_checked_at`, the daily limit and Spend.
 7. **Credentials and degrees.** Credential terms as hard filters, and "degree in" any field.
 8. **Scout and tailoring.** The Must use picker, the code gate and tailoring's check read the
    active profile's vocabulary.

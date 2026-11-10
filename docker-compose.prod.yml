@@ -1,0 +1,17 @@
+# Layered on docker-compose.yml for a public host, where Caddy on the host terminates TLS and
+# proxies to web on 127.0.0.1 (HTTP_BIND in .env): secure cookies, and nginx trusting Caddy for
+# each visitor's address.
+services:
+  api:
+    environment:
+      COOKIE_SECURE: "true"
+      # Closed by default on a public host. Anyone could otherwise sign up. Set
+      # PUBLIC_REGISTRATION=true in .env to open it.
+      REGISTRATION_ENABLED: ${PUBLIC_REGISTRATION:-false}
+      # Closed by default on a public host. Anyone could otherwise log applications
+      # to this account. Set PUBLIC_DEFAULT_USER_ID in .env to open it.
+      DEFAULT_USER_ID: ${PUBLIC_DEFAULT_USER_ID:-}
+
+  web:
+    volumes:
+      - ./frontend/nginx/prod.conf:/etc/nginx/conf.d/default.conf:ro

@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 540" width="1020" height="540" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Callback's containers</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    </marker>
+    <style>
+      .box { fill: #eef3ec; stroke: #5b7553; stroke-width: 1.5; }
+      .db { fill: #e6eef5; stroke: #4a6a8a; stroke-width: 1.5; }
+      .ext { fill: #ffffff; stroke: #8c959f; stroke-width: 1.5; stroke-dasharray: 5 4; }
+      .name { font-size: 15px; font-weight: 600; fill: #1f2328; }
+      .sub { font-size: 11.5px; fill: #57606a; }
+      .line { stroke: #57606a; stroke-width: 1.5; fill: none; }
+      .bus { stroke: #4a6a8a; stroke-width: 1.5; fill: none; }
+    </style>
+  </defs>
+
+  <rect width="1020" height="540" fill="#ffffff"/>
+
+  <!-- Database bus: every backend container reads and writes db -->
+  <path class="bus" d="M330,295 H365 M365,88 V448 M365,88 H400 M365,178 H400 M365,268 H400 M365,358 H400 M365,448 H400"/>
+
+  <!-- Browser to web to api to job boards -->
+  <path class="line" d="M160,68 H198" marker-end="url(#arrow)"/>
+  <path class="line" d="M350,68 H398" marker-end="url(#arrow)"/>
+  <path class="line" d="M590,68 H848" marker-end="url(#arrow)"/>
+
+  <!-- Workers to tailor, tailor to compiler and Anthropic -->
+  <path class="line" d="M590,178 H615 V215 H638" marker-end="url(#arrow)"/>
+  <path class="line" d="M590,268 H615 V231 H638" marker-end="url(#arrow)"/>
+  <path class="line" d="M725,251 V278" marker-end="url(#arrow)"/>
+  <path class="line" d="M810,223 H848" marker-end="url(#arrow)"/>
+
+  <!-- catalog-worker and billing out to the internet -->
+  <path class="line" d="M590,358 H848" marker-end="url(#arrow)"/>
+  <path class="line" d="M590,448 H848" marker-end="url(#arrow)"/>
+
+  <!-- Browser -->
+  <rect class="ext" x="30" y="40" width="130" height="56" rx="8"/>
+  <text class="name" x="95" y="73" text-anchor="middle">Browser</text>
+
+  <!-- web -->
+  <rect class="box" x="200" y="40" width="150" height="56" rx="8"/>
+  <text class="name" x="275" y="64" text-anchor="middle">web</text>
+  <text class="sub" x="275" y="82" text-anchor="middle">nginx</text>
+
+  <!-- db -->
+  <rect class="db" x="170" y="260" width="160" height="70" rx="8"/>
+  <text class="name" x="250" y="290" text-anchor="middle">db</text>
+  <text class="sub" x="250" y="308" text-anchor="middle">Postgres, no internet</text>
+
+  <!-- Backend column -->
+  <rect class="box" x="400" y="40" width="190" height="56" rx="8"/>
+  <text class="name" x="495" y="64" text-anchor="middle">api</text>
+  <text class="sub" x="495" y="82" text-anchor="middle">FastAPI</text>
+
+  <rect class="box" x="400" y="150" width="190" height="56" rx="8"/>
+  <text class="name" x="495" y="174" text-anchor="middle">worker</text>
+  <text class="sub" x="495" y="192" text-anchor="middle">tailoring, research, reports, PDFs</text>
+
+  <rect class="box" x="400" y="240" width="190" height="56" rx="8"/>
+  <text class="name" x="495" y="264" text-anchor="middle">scout-worker</text>
+  <text class="sub" x="495" y="282" text-anchor="middle">Scout runs, also job boards</text>
+
+  <rect class="box" x="400" y="330" width="190" height="56" rx="8"/>
+  <text class="name" x="495" y="354" text-anchor="middle">catalog-worker</text>
+  <text class="sub" x="495" y="372" text-anchor="middle">reads companies' own boards</text>
+
+  <rect class="box" x="400" y="420" width="190" height="56" rx="8"/>
+  <text class="name" x="495" y="444" text-anchor="middle">billing</text>
+  <text class="sub" x="495" y="462" text-anchor="middle">usage and cost reports</text>
+
+  <!-- tailor and compiler -->
+  <rect class="box" x="640" y="195" width="170" height="56" rx="8"/>
+  <text class="name" x="725" y="219" text-anchor="middle">tailor</text>
+  <text class="sub" x="725" y="237" text-anchor="middle">the only model calls</text>
+
+  <rect class="box" x="640" y="280" width="170" height="56" rx="8"/>
+  <text class="name" x="725" y="304" text-anchor="middle">compiler</text>
+  <text class="sub" x="725" y="322" text-anchor="middle">LaTeX for worker and tailor</text>
+
+  <!-- Outside services -->
+  <rect class="ext" x="850" y="40" width="140" height="56" rx="8"/>
+  <text class="name" x="920" y="73" text-anchor="middle">Job boards</text>
+
+  <rect class="ext" x="850" y="195" width="140" height="56" rx="8"/>
+  <text class="name" x="920" y="228" text-anchor="middle">Anthropic API</text>
+
+  <rect class="ext" x="850" y="330" width="140" height="56" rx="8"/>
+  <text class="name" x="920" y="354" text-anchor="middle">Company</text>
+  <text class="name" x="920" y="373" text-anchor="middle">job boards</text>
+
+  <rect class="ext" x="850" y="420" width="140" height="56" rx="8"/>
+  <text class="name" x="920" y="444" text-anchor="middle">Anthropic</text>
+  <text class="name" x="920" y="463" text-anchor="middle">usage reports</text>
+
+  <!-- Legend -->
+  <rect class="box" x="30" y="500" width="16" height="16" rx="3"/>
+  <text class="sub" x="54" y="512">Container</text>
+  <rect class="ext" x="130" y="500" width="16" height="16" rx="3"/>
+  <text class="sub" x="154" y="512">Outside Callback</text>
+  <path class="bus" d="M270,508 H300"/>
+  <text class="sub" x="308" y="512">Reads and writes db</text>
+</svg>

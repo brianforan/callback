@@ -1,0 +1,19 @@
+# Layered on docker-compose.yml for local development: the API runs your working copy of
+# backend/app and restarts when a file there changes. `make dev` uses it, and `make up` returns
+# to the built image. Never use it on a public host.
+services:
+  api:
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --no-server-header
+      - --reload
+      - --reload-dir
+      - /srv/app
+    volumes:
+      # Read-only, so nothing in the container can change your source.
+      - ./backend/app:/srv/app:ro

@@ -1,0 +1,335 @@
+:root[data-mantine-color-scheme='light'] {
+  --app-plane: #f7f3ee;
+  --viz-series-1: #4b6f33;
+  --viz-series-2: #a8741a;
+  --viz-stack-1: #5f69d6;
+  --viz-stack-2: #eb6834;
+  --viz-stack-3: #1baf7a;
+  --viz-stack-4: #eda100;
+  --viz-stack-5: #e87ba4;
+  --viz-grid: #ebe4da;
+  --viz-axis: #cfc5b6;
+  --viz-muted: #6e6558;
+  --viz-surface: #ffffff;
+  --viz-ink: #1c1712;
+  --viz-hover: rgba(28, 23, 18, 0.05);
+  --viz-funnel-1: #cfe0bd;
+  --viz-funnel-2: #8fb26b;
+  --viz-funnel-3: #4b6f33;
+  --viz-funnel-4: #2c4520;
+  --viz-heat-2: #e6efdb;
+  --viz-heat-3: #d0e0bd;
+  --viz-heat-4: #aecb8f;
+  --viz-heat-5: #7ea455;
+  --viz-heat-6: #4b6f33;
+  --viz-heat-7: #2c4520;
+  --table-stripe: rgba(75, 111, 51, 0.045);
+  --table-hover: rgba(75, 111, 51, 0.1);
+  --table-head: #f1eee4;
+}
+
+:root[data-mantine-color-scheme='dark'] {
+  --app-plane: #14100d;
+  --card-edge: rgba(241, 235, 228, 0.09);
+  --viz-series-1: #8cae68;
+  --viz-series-2: #d9b04a;
+  --viz-stack-1: #3987e5;
+  --viz-stack-2: #d95926;
+  --viz-stack-3: #199e70;
+  --viz-stack-4: #c98500;
+  --viz-stack-5: #d55181;
+  --viz-grid: #352c25;
+  --viz-axis: #4d4238;
+  --viz-muted: #b3a698;
+  --viz-surface: #211b16;
+  --viz-ink: #f1ebe4;
+  --viz-hover: rgba(241, 235, 228, 0.05);
+  --viz-funnel-1: #2e4220;
+  --viz-funnel-2: #4b7332;
+  --viz-funnel-3: #8cb869;
+  --viz-funnel-4: #dcebcc;
+  --viz-heat-2: #222a1a;
+  --viz-heat-3: #2f3e22;
+  --viz-heat-4: #46602f;
+  --viz-heat-5: #6f9650;
+  --viz-heat-6: #9cc178;
+  --viz-heat-7: #cfe3b8;
+  --table-stripe: rgba(140, 174, 104, 0.045);
+  --table-hover: rgba(140, 174, 104, 0.1);
+  --table-head: #2a251c;
+}
+
+.app-main {
+  background: var(--app-plane);
+  min-height: 100dvh;
+}
+
+/* In dark mode a hairline of warm light, not the default border, separates a card from the page. */
+:root[data-mantine-color-scheme='dark'] .mantine-Card-root {
+  border-color: var(--card-edge);
+}
+
+.mantine-Title-root {
+  letter-spacing: -0.02em;
+}
+
+.clickable-row {
+  cursor: pointer;
+}
+
+/* Mantine's dark stripe matches the card, so stripes and hover take a faint tint of the primary. */
+:root .mantine-Table-table {
+  --table-striped-color: var(--table-stripe);
+  --table-hover-color: var(--table-hover);
+}
+
+/* Opaque, so the sticky header hides the rows scrolling under it. */
+.mantine-Table-thead .mantine-Table-th {
+  background: var(--table-head);
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* KPI filters carry their color in --kpi-color, set inline from a Mantine color name. */
+.kpi-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: var(--mantine-spacing-sm);
+}
+
+.kpi-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+  background: var(--viz-surface);
+  border: 1px solid var(--viz-grid);
+  border-top: 3px solid var(--kpi-color);
+  border-radius: var(--mantine-radius-md);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    transform 120ms ease;
+}
+
+.kpi-filter:hover {
+  transform: translateY(-1px);
+  border-color: var(--kpi-color);
+}
+
+.kpi-filter[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--kpi-color) 14%, var(--viz-surface));
+  border-color: var(--kpi-color);
+}
+
+.kpi-filter[data-empty='true']:not([aria-pressed='true']) {
+  opacity: 0.6;
+}
+
+.stack-trigger {
+  cursor: help;
+}
+
+/* The listing row menu reads as a select: its value is where the job stands, its options act. */
+.action-select-chevron {
+  opacity: 0.7;
+  transition: transform 150ms ease;
+}
+
+.action-select[data-expanded] .action-select-chevron {
+  transform: rotate(180deg);
+}
+
+.kpi-filter-value {
+  color: var(--kpi-color);
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+/* A control on every row is a lot of boxes. Each shows its outline only when in use. */
+.mantine-Table-td .mantine-Select-input:not(:hover, :focus) {
+  background: transparent;
+  border-color: transparent;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--mantine-spacing-sm);
+}
+
+.board-column {
+  background: var(--viz-hover);
+  border-radius: var(--mantine-radius-md);
+  padding: var(--mantine-spacing-xs);
+  height: 100%;
+  min-height: 320px;
+  outline: 2px solid transparent;
+  transition: outline-color 120ms ease;
+}
+
+.board-column[data-drop-target='true'] {
+  outline-color: var(--viz-series-1);
+}
+
+.board-card {
+  cursor: grab;
+}
+
+/* The track shows where a bar would end, so a stage nobody reached reads as empty and not as a glitch. */
+.funnel-track {
+  background: var(--viz-hover);
+  border-radius: 6px;
+  height: 22px;
+  overflow: hidden;
+}
+
+.funnel-bar {
+  border-radius: 6px;
+  height: 100%;
+  min-width: 3px;
+  transition: width 200ms ease;
+}
+
+.share-list {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+}
+
+.share-track {
+  background: var(--viz-hover);
+  border-radius: 4px;
+  height: 10px;
+}
+
+.share-fill {
+  background: var(--viz-series-1);
+  border-radius: 4px;
+  height: 100%;
+  min-width: 3px;
+}
+
+.recharts-surface:focus,
+.recharts-wrapper:focus {
+  outline: none;
+}
+
+.focus-slot,
+.focus-host,
+.focus-panel {
+  height: 100%;
+}
+
+.focus-panel {
+  position: relative;
+  border-radius: var(--mantine-radius-md);
+}
+
+.focus-panel[data-selected='true'] {
+  outline: 2px solid var(--viz-series-1);
+  outline-offset: 2px;
+}
+
+/* Straddles the top edge so it never covers a card's own header controls. */
+.focus-controls {
+  position: absolute;
+  top: -11px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+  padding: 1px 3px;
+  background: var(--viz-surface);
+  border: 1px solid var(--viz-grid);
+  border-radius: var(--mantine-radius-sm);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.focus-panel:hover > .focus-controls,
+.focus-panel:focus-within > .focus-controls,
+.focus-panel[data-selected='true'] > .focus-controls {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .focus-controls {
+    opacity: 1;
+  }
+}
+
+.focus-bar {
+  position: fixed;
+  bottom: var(--mantine-spacing-md);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+}
+
+.focus-modal-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--app-plane);
+}
+
+.focus-modal-header {
+  background: var(--app-plane);
+}
+
+.focus-modal-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.focus-grid {
+  display: grid;
+  height: 100%;
+  gap: var(--mantine-spacing-sm);
+  grid-template-columns: repeat(var(--focus-columns), minmax(0, 1fr));
+  grid-auto-rows: minmax(320px, 1fr);
+  overflow-y: auto;
+}
+
+.focus-grid > .focus-host {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.focus-grid .mantine-Card-root {
+  overflow: auto;
+}
+
+/* Tables cap their height on the page. In focus they take the room they're given. */
+.focus-grid .mantine-TableScrollContainer-scrollContainer {
+  max-height: none !important;
+}
+
+.focus-grid .chart-card-body {
+  position: relative;
+  flex: 1;
+  min-height: 220px;
+}
+
+.focus-grid .chart-card-body > .recharts-responsive-container {
+  position: absolute;
+  inset: 0;
+}
+
+@media (max-width: 48em) {
+  .focus-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

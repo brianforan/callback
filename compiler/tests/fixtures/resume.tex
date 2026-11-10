@@ -1,0 +1,57 @@
+\documentclass[10pt,letterpaper]{article}
+
+\usepackage[margin=0.62in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[default]{sourcesanspro}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\hypersetup{pdftitle={Jordan Example - Resume},pdfauthor={Jordan Example}}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{xcolor}
+
+\input{glyphtounicode}
+\pdfgentounicode=1
+
+\setlength{\parindent}{0pt}
+\pagestyle{empty}
+
+\definecolor{rulegray}{HTML}{505D6B}
+\titleformat{\section}{\bfseries\large}{}{0em}{}[\color{rulegray}\titlerule]
+
+\newcommand{\job}[3]{%
+  \vspace{0.42em}\textbf{#1}\hfill\textit{#3}\par
+  \textit{#2}\par
+}
+
+\begin{document}
+
+\begin{center}
+  {\LARGE\bfseries Jordan Example}\\[0.12em]
+  {\large Software Engineer \textbar{} Backend \& Data}\\[0.18em]
+  Springfield \quad|\quad jordan@example.com
+\end{center}
+
+\section*{Technical Skills}
+\textbf{Languages:} Python, SQL, PHP, Laravel\\
+\textbf{Cloud:} AWS Lambda, S3, DynamoDB, Docker
+
+\section*{Professional Experience}
+
+\job{Software Engineer}{Example Corp \quad|\quad Remote}
+{Jan 2021 -- Oct 2026}
+\begin{itemize}
+  \item Built a Laravel billing workflow over daily uploads of authorization rows.
+  \item Moved clock-in processing to queue workers with idempotency keys.
+\end{itemize}
+
+\job{Systems Engineer}{Sample Media \quad|\quad Springfield}
+{Mar 2018 -- Dec 2020}
+\begin{itemize}
+  \item Wrote Python tools to classify problematic video streams.
+\end{itemize}
+
+\section*{Education}
+\textbf{Example University} \quad|\quad Bachelor's in Computer Science \hfill 2017
+
+\end{document}

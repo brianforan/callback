@@ -1,0 +1,284 @@
+name: callback
+
+x-hardened: &hardened
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
+x-api-environment: &api-environment
+  DATABASE_URL: postgresql+psycopg://callback:${POSTGRES_PASSWORD:?run make init}@db:5432/callback
+  SECRET_KEY: ${SECRET_KEY:?run make init}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+  STALE_AFTER_DAYS: ${STALE_AFTER_DAYS:-14}
+  DEFAULT_USER_ID: ${DEFAULT_USER_ID:-}
+  LISTINGS_CACHE_MINUTES: ${LISTINGS_CACHE_MINUTES:-360}
+  JOOBLE_API_KEY: ${JOOBLE_API_KEY:-}
+  FINDWORK_API_KEY: ${FINDWORK_API_KEY:-}
+  MUSE_API_KEY: ${MUSE_API_KEY:-}
+  INDEED_ENABLED: ${INDEED_ENABLED:-false}
+  LINKEDIN_ENABLED: ${LINKEDIN_ENABLED:-false}
+  BILLING_API_KEY_ID: ${BILLING_API_KEY_ID:-}
+  BILLING_WORKSPACE_ID: ${BILLING_WORKSPACE_ID:-}
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_USER: callback
+      POSTGRES_DB: callback
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run make init}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    mem_limit: 384m
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U callback -d callback"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    <<: *hardened
+    build:
+      context: ./backend
+      target: runtime
+    image: callback-api
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment: *api-environment
+    mem_limit: 256m
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *hardened
+    build:
+      context: ./backend
+      target: runtime
+    image: callback-api
+    environment: *api-environment
+    mem_limit: 384m
+    networks:
+      - backend
+      - edge
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+
+  # Works through tailoring jobs one at a time, and compiles each resume's PDF. With
+  # scout-worker, one of the two services that talk to tailor, and with tailor, one of the
+  # two that talk to compiler.
+  worker:
+    <<: *hardened
+    build:
+      context: ./backend
+      target: runtime
+    image: callback-api
+    command: ["python", "-m", "app.tailoring.worker"]
+    environment: *api-environment
+    mem_limit: 256m
+    networks:
+      - backend
+      - tailor
+      - compiler
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      tailor:
+        condition: service_healthy
+      compiler:
+        condition: service_healthy
+
+  # Reads Anthropic's usage and cost reports so the admins' Spend page can compare what Callback
+  # measured with what was billed. It's the only container with the Admin API key, and its egress
+  # network exists only so api.anthropic.com can be reached. No model call happens here.
+  billing:
+    <<: *hardened
+    build:
+      context: ./backend
+      target: runtime
+    image: callback-api
+    command: ["python", "-m", "app.billing.worker"]
+    environment:
+      <<: *api-environment
+      ANTHROPIC_ADMIN_API_KEY: ${ANTHROPIC_ADMIN_API_KEY:-}
+      # Used for the reports when there's no Admin key. It can't make model calls from here,
+      # since this container has no code that sends messages.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    mem_limit: 128m
+    networks:
+      - backend
+      - billing-egress
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Sends Scout runs to tailor, one at a time, and stores what they found. It's separate
+  # from worker so a run, which takes minutes, never holds up a tailoring. Web searches and model
+  # calls happen in tailor. Its egress network exists only so pipeline runs can search the same
+  # job boards as Job listings, as the api does; it holds no Anthropic key.
+  scout-worker:
+    <<: *hardened
+    build:
+      context: ./backend
+      target: runtime
+    image: callback-api
+    command: ["python", "-m", "app.scout.worker"]
+    environment: *api-environment
+    # Job board results are held in memory while a run searches, as in the api.
+    mem_limit: 384m
+    networks:
+      - backend
+      - tailor
+      - scout-egress
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      tailor:
+        condition: service_healthy
+
+  # Keeps the Companies catalog fresh: every 6 hours it reads the open jobs of the companies on
+  # any profile's list, from each company's own Greenhouse, Lever or Ashby board. It holds no API
+  # key and makes no model calls; its egress network exists only to reach those job boards.
+  catalog-worker:
+    <<: *hardened
+    build:
+      context: ./backend
+      target: runtime
+    image: callback-api
+    command: ["python", "-m", "app.companies.catalog_worker"]
+    environment: *api-environment
+    mem_limit: 256m
+    networks:
+      - backend
+      - catalog-egress
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # The only service that makes model calls. It runs no LaTeX: it sends each draft to
+  # compiler. It has no database access and no published port. Its egress network exists only so
+  # the model API can be reached.
+  tailor:
+    <<: *hardened
+    build:
+      context: ./tailor
+      target: runtime
+    image: callback-tailor
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      TAILOR_MODEL: ${TAILOR_MODEL:-claude-sonnet-5-5}
+      SCOUT_MODEL: ${SCOUT_MODEL:-claude-sonnet-5-5}
+      REJECT_ANALYSIS_MODEL: ${REJECT_ANALYSIS_MODEL:-claude-haiku-5-5}
+      COMPANY_RESEARCH_MODEL: ${COMPANY_RESEARCH_MODEL:-claude-haiku-5-5}
+      COMPANY_RESEARCH_MAX_SEARCHES: ${COMPANY_RESEARCH_MAX_SEARCHES:-6}
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    mem_limit: 256m
+    pids_limit: 64
+    networks:
+      - tailor
+      - compiler
+      - tailor-egress
+    depends_on:
+      compiler:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+
+  # Turns LaTeX into a PDF in a sandbox, and nothing else. It has no secrets, no database access,
+  # no published port and no route to the internet: its only network is internal. The memory limit
+  # is what keeps a runaway compile from taking a small host down with it.
+  compiler:
+    <<: *hardened
+    build:
+      context: ./compiler
+      target: runtime
+    image: callback-compiler
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    mem_limit: 512m
+    pids_limit: 64
+    networks:
+      - compiler
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+
+  web:
+    <<: *hardened
+    build:
+      context: ./frontend
+      target: runtime
+    image: callback-web
+    mem_limit: 64m
+    ports:
+      - "${HTTP_BIND:-127.0.0.1:8080}:8080"
+    networks:
+      - edge
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+networks:
+  # The database sits on an internal network: unreachable from the host and with no internet access.
+  backend:
+    internal: true
+  edge:
+  # Only the two workers and tailor sit on this one, so nothing else can reach the tailor service.
+  tailor:
+    internal: true
+  # Only the worker, tailor and compiler sit on this one. It has no internet route, so the
+  # compiler can't send anything out.
+  compiler:
+    internal: true
+  tailor-egress:
+  billing-egress:
+  scout-egress:
+  catalog-egress:
+
+volumes:
+  pgdata:

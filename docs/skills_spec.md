@@ -1,8 +1,8 @@
 # Skills, role types and levels for any field
 
 Status: spec, 2026-11-10, revised the same day for shared field pools, catalog suggestions,
-model suggestions only if needed, and employer title ladders. Chunk 1 is built (2026-11-10); the
-rest isn't. It changes how postings are parsed and scored (`app/postings/parser.py`,
+model suggestions only if needed, and employer rank words. Chunks 1 and 2 are built (2026-11-10);
+the rest isn't. It changes how postings are parsed and scored (`app/postings/parser.py`,
 `app/resumes/matching.py`, `app/resumes/structure.py`, `app/vocabulary.py`) and everything that
 reads their skills.
 
@@ -116,10 +116,6 @@ exactly one.
 `field_catalog_phrases` (new): candidate phrases from catalog jobs in a field, rebuilt daily.
 - `field_id` (cascade), `phrase` varchar(120), `companies` int, `updated_at`. Primary key
   (`field_id`, lower(`phrase`)). Only phrases used by 3 or more companies are kept.
-
-`company_ladders` (new): what a company's rank words mean, learned from the shared catalog.
-- `company_key` varchar(200), `word` varchar(40), `level` varchar(20) (a `PostingLevel` value),
-  `jobs` int, `updated_at`. Primary key (`company_key`, `word`).
 
 `users`
 - `vocabulary_version` as built. It goes up for every user with a profile in a field whenever that
@@ -302,28 +298,23 @@ A posting's level is the first of these that applies:
 6. Years asked, when the posting names them: under 2 junior, under 5 mid, under 8 senior, else
    staff, as `_parse_level` does today when a title names no level. "Senior Associate Scientist,
    3+ years" is mid ("senior associate" is one rank word, so "senior" isn't a plain word here).
-7. The company's ladder: `company_ladders` for the posting's company key and that word.
-8. The built-in individual-contributor ladder: associate junior, senior associate mid, AVP mid,
+7. The built-in individual-contributor ladder: associate junior, senior associate mid, AVP mid,
    VP senior, SVP, director and executive director staff, managing director principal, the staff
    uses junior, Member of Technical Staff and the architect uses no level.
 
 The role family follows step 4: a director or VP is Management exactly when step 4 makes it a
 manager. Company hiring history, which has only titles, keeps today's title-only reading.
 
-**Company ladders.** Once a day the catalog worker reads the shared catalog. For each company and
-rank word, it takes the jobs with that word in the title whose text asks for years, turns each
-into a level by the bands in step 6, and stores the most common one when there are at least 2 such
-jobs. Only the catalog is read, not anyone's postings.
-
-Levels never call a model: step 4's text check settles the case a model would have been asked
-about, a lone posting with a rank word and no years.
+Levels never call a model and use no stored data. Measured on the local catalog (18,853 jobs),
+only 137 reach step 7, mostly Associate titles that name no years, so a ladder learned per company
+was left out.
 
 ## Parser changes
 
 - `parse_posting` and `parse_requirements` take the user's vocabulary (built in chunk 1).
 - `parse_role_family` is replaced by `role_type(title, text, role_types)`.
-- `_parse_level(title, years)` becomes `_parse_level(title, years, text, ladder)` and follows
-  Levels.
+- `_parse_level(title, years)` becomes `_parse_level(title, years, text)` and follows Levels
+  (built).
 - **Degree:** a line that says "degree in" a field, with no level named, counts as a bachelor's
   whatever the field.
 
@@ -370,9 +361,10 @@ Resumes has a fourth tab, **Skills**, for the active profile:
 
 1. **Terms and the parser.** Built 2026-11-10, with terms per profile; chunk 3 moves them into
    field pools.
-2. **Levels.** Rank words, the people-management check, years, the individual-contributor ladder,
-   company ladders, the rank-word rule for the Management role family, and the "staff" and
-   "architect" rule. Needs no fields, and fixes bank postings for software profiles.
+2. **Levels.** Built 2026-11-10. Rank words, the people-management check, years, the
+   individual-contributor ladder, the rank-word rule for the Management role family, and the
+   "staff" and "architect" exceptions. Needs no fields, and fixes bank postings for software
+   profiles.
 3. **Fields.** `fields`, `field_terms`, `profiles.field_id`, `profile_terms` as turned-down names,
    the migration, version bumps across a field, the Field line and shared Edit on the Skills tab,
    and Admin → Fields.
@@ -400,7 +392,10 @@ Each chunk is usable on its own, and the README changes with each.
   under the daily limit.
 - A model check for near-duplicate field names ("pharma tech" and "life sciences IT"). The admin
   merges them.
-- Company industry. Ladders come from a company's own catalog jobs, not from research's `industry`.
+- Company ladders: what each employer's rank words mean, learned from its catalog jobs that ask
+  for years. Measured at 47 of 18,853 catalog jobs it would change, so left out; worth another
+  look if catalog postings without years grow.
+- Company industry as a level signal (research's `industry` covers only researched companies).
 - "Product Manager" and "Account Manager" are still read as manager level. "Manager" isn't a rank
   word.
 - Weights per field or profile.
